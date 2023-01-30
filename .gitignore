@@ -32,5 +32,6 @@ override.tf.json
 *.bak
 
 
-#my folders
+#my folders and files
 Raspberry Pi4 ssh peste internet/
+myvalues
