@@ -41,3 +41,4 @@ terraform.rc
 Raspberry Pi4 ssh peste internet/
 myvalues
 /oci/ALTELE
+.terraform.lock.hcl
