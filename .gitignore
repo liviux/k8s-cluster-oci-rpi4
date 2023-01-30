@@ -30,3 +30,7 @@ override.tf.json
 
 # bak files
 *.bak
+
+
+#my folders
+Raspberry Pi4 ssh peste internet/
