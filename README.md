@@ -19,3 +19,10 @@ This long read is a tutorial for deploying a Kubernetes (using k3s) cluster with
 * [Deploy a sample stack](#deploy-a-sample-stack)
 * [Clean up](#clean-up)
 * [Known Bugs](#known-bugs)
+* [Acknowledgments](#acknowledgments)
+
+
+
+# Acknowledgments
+Official OCI provider documentation from Terraform - [here](https://registry.terraform.io/providers/oracle/oci/latest/docs).  
+Official OCI Oracle documentation with Tutorials - [here](https://docs.oracle.com/en-us/iaas/developer-tutorials/tutorials/tf-provider/01-summary.htm) and Guides - [here](https://docs.oracle.com/en-us/iaas/Content/API/SDKDocs/terraform.htm).
