@@ -11,7 +11,7 @@ I've made a series of articles on [dev.to](https://dev.to/liviux/k8s-cluster-wit
       - [Requirements](#requirements)
       - [Preparing](#preparing)
       - [Provisioning](#provisioning)
-    - [Raspberry Pi4](raspberry-pi4)
+    - [Raspberry Pi4](#raspberry-pi4)
       - [Requirements](#requirements)
       - [Preparing](#preparing)
       - [Provisioning](#provisioning)
