@@ -11,7 +11,7 @@ I've made a series of articles on [dev.to](https://dev.to/liviux/k8s-cluster-wit
       - [Requirements](#requirements)
       - [Preparing](#preparing)
       - [Provisioning](#provisioning)
-    - Raspberry Pi4
+    - [Raspberry Pi4](raspberry-pi4)
       - [Requirements](#requirements)
       - [Preparing](#preparing)
       - [Provisioning](#provisioning)
@@ -144,7 +144,7 @@ public_lb_ip = tolist([
 ```
 Now you can connect to any worker or server IP using `ssh -i ~/.ssh/key ubuntu@152.x.x.115`. Connect to server IP and write `sudo kubectl get nodes` to check all nodes.
 
-# Raspberry Pi 4
+# Raspberry Pi4
 
 This section is for the RPI4 part of the cluster.
 
