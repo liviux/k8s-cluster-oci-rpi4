@@ -144,6 +144,10 @@ public_lb_ip = tolist([
 ```
 Now you can connect to any worker or server IP using `ssh -i ~/.ssh/key ubuntu@152.x.x.115`. Connect to server IP and write `sudo kubectl get nodes` to check all nodes.
 
+# Raspberry Pi 4
+
+This section is for the RPI4 part of the cluster.
+
 # References
 Official OCI provider documentation from Terraform - [here](https://registry.terraform.io/providers/oracle/oci/latest/docs).  
 Official OCI Oracle documentation with Tutorials - [here](https://docs.oracle.com/en-us/iaas/developer-tutorials/tutorials/tf-provider/01-summary.htm) and Guides - [here](https://docs.oracle.com/en-us/iaas/Content/API/SDKDocs/terraform.htm).  
