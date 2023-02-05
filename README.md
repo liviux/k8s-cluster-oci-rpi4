@@ -12,9 +12,9 @@ I've made a series of articles on [dev.to](https://dev.to/liviux/k8s-cluster-wit
       - [Preparing](#preparing)
       - [Provisioning](#provisioning)
     - [Raspberry Pi4](#raspberry-pi4)
-      - [Requirements](#requirements)
-      - [Preparing](#preparing)
-      - [Provisioning](#provisioning)
+      - [Requirements](#requirements-1)
+      - [Preparing](#preparing-1)
+      - [Ansible](#ansible)
   - [References](#references)
 
 # OCI
@@ -148,7 +148,167 @@ Now you can connect to any worker or server IP using `ssh -i ~/.ssh/key ubuntu@1
 
 This section is for the RPI4 part of the cluster.
 
+## Requirements
+
+- At least 2 Raspberry Pi. I've got 4 of them, 3 with 4GB and 1 with 8GB (that will be my master node). Every one needs a SD Card, a power adapter plus network cables (plus an optional switch and 4 cases);
+- And the same from part 1. Windows 11 with WSL2 running Ubuntu 20.04, but this will work on any Linux & Win machine and Terraform installed (tested with v1.3.7)- how to [here](https://developer.hashicorp.com/terraform/tutorials/aws-get-started/install-cli);
+
+
+![my setup](https://dev-to-uploads.s3.amazonaws.com/uploads/articles/0edbmj9h7vt1ls8805nd.jpg)My Pis
+
+
+## Preparing
+
+Installing an OS on Pi is very easy. Just insert the SD card in your PC and use Imager from [official website](https://www.raspberrypi.com/software/). I choose the same OS as in the OCI cluster, that is Ubuntu Server 22.04.1 64bit. In advanced settings (bottom right of Imager) pick _Set Hostname_ and write your own. I have rpi4-1 rpi4-2 rpi4-3 and rpi4-4. Pick _Enable SSH_ and _Set username and password_, this way you can connect to Pi immediately, without a monitor and keyboard for it. Then hit _Write_ and repeat this step for every one.
+
+From my home router I found the devices IPs. Still there you can configure _Address reservation_ so every time they keep their IP. Did some Port forwarding too so I can access them from everywhere using DDNS from my ISP, as I don't have static IPv4. All of these settings are configured from you home router so Google how to if you're interested.
+
+I added every PI to local machine _C:\Windows\System32\drivers\etc\hosts_  file to be able to control them easier.
+```
+192.168.0.201 rpi4-1
+192.168.0.202 rpi4-2
+192.168.0.203 rpi4-3
+192.168.0.204 rpi4-4
+```
+We can check if everything is ok by running some `ping rpi4-1` or `ssh user@rpi4-1`.
+
+## Ansible
+For configuration management I picked Ansible as it is agentless and not so difficult (spoiler alert, it is though). We can control all RPI4 from local machine. Install Ansible first `sudo apt install ansible`.
+Now from your PC run the following commands (assuming you already generated ssh keys from Part 1, using ssh-keygen):
+```
+ssh-copy-id -i ~/.ssh/key.pub user@rpi4-1
+ssh-copy-id -i ~/.ssh/key.pub user@rpi4-2
+ssh-copy-id -i ~/.ssh/key.pub user@rpi4-3
+ssh-copy-id -i ~/.ssh/key.pub user@rpi4-4
+```
+This will allow Ansible to connect to every Pi without requesting the password every time. 
+I had to uncomment with `sudo vi /etc/ansible/ansible.cfg` the line with `private_key_file = ~/.ssh/key`. And in /etc/ansible/hosts i added the following:
+```
+[server]
+rpi4-1  ansible_connection=ssh
+
+[agents]
+rpi4-2  ansible_connection=ssh
+rpi4-3  ansible_connection=ssh
+rpi4-4  ansible_connection=ssh
+
+[home:children]
+server
+agents
+```
+This will add the master rpi4 in a server group and the rest of workers to an agents group. Plus a bigger group having them all. My PC user and RPIs user is the same, but if you have a different one you have to add this to the same file:
+```
+[all:vars]
+remote_user = user
+```
+Now test if everything is ok with `ansible home -m ping`. Green is ok.
+I like to keep all my systems updated to latest version, especially this one used for testing. So we'll need to create a new file _update.yml_ and paste below block in it:
+```
+---
+- hosts: home
+  tasks:
+    - name: Update apt repo and cache
+      apt: update_cache=yes force_apt_get=yes cache_valid_time=3600
+    - name: Upgrade all packages
+      apt: upgrade=yes force_apt_get=yes
+    - name: Check if a reboot is needed
+      register: reboot_required_file
+      stat: path=/var/run/reboot-required get_md5=no
+    - name: Reboot the box if kernel updated
+      reboot:
+        msg: "Reboot initiated by Ansible for kernel updates"
+        connect_timeout: 5
+        reboot_timeout: 90
+        pre_reboot_delay: 0
+        post_reboot_delay: 30
+        test_command: uptime
+      when: reboot_required_file.stat.exists
+```
+This is an Ansible playbook that updates Ubuntu and then reboots the PIs. Now save it and run `ansible-playbook update.yml -K -b` which will ask for sudo password and run the playbook. It lasted ~10 minutes for me. On another shell you can ssh to any of the PIs and run `htop `to see the activity.
+Now try `ansible home -a "rpi-eeprom-update -a" -b -K ` to see if there's any firmware update for you Raspberry Pi 4.
+Next step is to enable cgroups on every PI. Create a new playbook append-cmd.yml and add:
+```
+---
+- hosts: home
+  tasks:
+  - name: Append cgroup to cmdline.txt
+    lineinfile:
+      path: /boot/firmware/cmdline.txt
+      backrefs: yes
+      regexp: "^(.*)$"
+      line: '\1 cgroup_enable=cpuset cgroup_enable=memory cgroup_memory=1'
+...
+```
+This will append to end of file _/boot/firmware/cmdline.txt_ the strings _cgroup_enable=cpuset cgroup_enable=memory cgroup_memory=1_. Run it with `ansible-playbook append-cmd.yml -K -b`.
+I won't add a graphical interface and won't use Wi-Fi and Bluetooth so we can steal some memory from GPU memory, Wi-Fi and BT to be available to the Kubernetes cluster. So we need to add a few lines to _/boot/firmware/config.txt_ using a new Ansible playbook append-cfg.yml with following content:
+```
+---
+- hosts: home
+  tasks:
+  - name: Append new lines to config.txt
+    blockinfile:
+      path: /boot/firmware/config.txt
+      block: |
+       gpu_mem=16
+       dtoverlay=disable-bt
+       dtoverlay=disable-wifi
+...
+```
+Run it again with `ansible-playbook append-cfg.yml -K -b`.
+Next 2 mods must be enabled with command `ansible home -a "modprobe overlay" -a "modprobe br_netfilter" -K -b`.
+Next playbook will create 2 files and add some lines to it. Let's call it _iptable.yml_ and add:
+```
+---
+- hosts: home
+  tasks:
+  - name: Create a file and write in it 1.
+    blockinfile:
+      path: /etc/modules-load.d/k8s.conf
+      block: |
+        overlay
+        br_netfilter
+      create: yes
+  - name: Create a file and write in it 2.
+    blockinfile:
+      path: /etc/sysctl.d/k8s.conf
+      block: |
+        net.bridge.bridge-nf-call-ip6tables = 1
+        net.bridge.bridge-nf-call-iptables = 1
+        net.ipv4.ip_forward = 1
+      create: yes
+...
+```
+Run it with `ansible-playbook iptable.yml -K -b`. After that run `ansible home -a "sysctl --system" -K -b`. My PIs started to be laggy so i rebooted here with `ansible home -a "reboot" -K -b`.
+Now the last step. Installing some apps on PIs. I'm still unsure if this is needed, but I'm pretty sure it won't harm the cluster. Create a new file _install.yml_ and add copy this:
+```
+---
+- hosts: home
+  tasks:
+  - name: Install some packages
+    apt:
+      name:
+        - curl
+        - gnupg2
+        - software-properties-common
+        - apt-transport-https
+        - ca-certificates
+        - linux-modules-extra-raspi
+...
+```
+Now run it with `ansible-playbook install.yml -K -b`.
+
+# Linking OCI with RPi4
+
+Now the fun part is linking the Raspberry Pi cluster to existing k3s cluster on OCI.
+
+
+
+
+
 # References
-Official OCI provider documentation from Terraform - [here](https://registry.terraform.io/providers/oracle/oci/latest/docs).  
-Official OCI Oracle documentation with Tutorials - [here](https://docs.oracle.com/en-us/iaas/developer-tutorials/tutorials/tf-provider/01-summary.htm) and Guides - [here](https://docs.oracle.com/en-us/iaas/Content/API/SDKDocs/terraform.htm).  
-Great GitHub repo of garutilorenzo - [here](https://github.com/garutilorenzo/k3s-oci-cluster). There are a few others who can help you with k8s on OCI too [1](https://arnoldgalovics.com/free-kubernetes-oracle-cloud/) with [repo](https://github.com/galovics/free-kubernetes-oracle-cloud-terraform), [2](https://github.com/r0b2g1t/k3s-cluster-on-oracle-cloud-infrastructure), [3](https://github.com/solamarpreet/kubernetes-on-oci).  
+Official OCI provider documentation from Terraform - [here](https://registry.terraform.io/providers/oracle/oci/latest/docs);  
+Official OCI Oracle documentation with Tutorials - [here](https://docs.oracle.com/en-us/iaas/developer-tutorials/tutorials/tf-provider/01-summary.htm) and Guides - [here](https://docs.oracle.com/en-us/iaas/Content/API/SDKDocs/terraform.htm);  
+Great GitHub repo of garutilorenzo - [here](https://github.com/garutilorenzo/k3s-oci-cluster). There are a few others who can help you with k8s on OCI too [1](https://arnoldgalovics.com/free-kubernetes-oracle-cloud/) with [repo](https://github.com/galovics/free-kubernetes-oracle-cloud-terraform), [2](https://github.com/r0b2g1t/k3s-cluster-on-oracle-cloud-infrastructure), [3](https://github.com/solamarpreet/kubernetes-on-oci);  
+One of my old k3s install on Raspbbery PI article on LinkedIn - [here](https://www.linkedin.com/pulse/creating-arm-kubernetes-cluster-raspberry-pi-oracle-liviu-alexandru) - inspired from [braindose.blog](https://braindose.blog/2021/12/31/install-kubernetes-raspberry-pi/);   
+Official Ansible documentation - [here](https://docs.ansible.com/);  
+ChatGPT helped me a lot of time, use it [here](https://chat.openai.com/chat).
