@@ -116,7 +116,7 @@ You will need to add some new values to the notes file:
 After you've cloned the repo, go to oci/terraform.tfvars and edit all values with the ones from your notes file. 
 This build uses the great terraform configuration files from this repo of [garutilorenzo](https://github.com/garutilorenzo/k3s-oci-cluster) (using version 2.2; if you have errors running all of this, you should check what changed in this repo since v2.2, or 01.02.23). You can read [here](https://github.com/garutilorenzo/k3s-oci-cluster#pre-flight-checklist) if you want to customize your configuration and edit the _main.tf_ file. This is the diagram that garutilorenzo made and how your deployment will look like (this tutorial is without Longhorn and with ingress controller set as Traefik):
 ![diagram](https://dev-to-uploads.s3.amazonaws.com/uploads/articles/j55a7depvbo0yz0n03tp.png)  
-_*note_ - I've got some problems with clock of WSL2 not being synced to Windows clock. And provisioning didn't worked so if you receive clock errors too, verify your time with `date `command, if out of sync just run `sudo hwclock -s`.
+_*note_ - I've got some problems with clock of WSL2 not being synced to Windows clock. And provisioning didn't worked so if you receive clock errors too, verify your time with `date`command, if out of sync just run `sudo hwclock -s` or `sudo ntpdate time.windows.com`.
 Now just run `terraform plan` and then `terraform apply`. If everything was ok you should have your resources created.
 
 When the script finishes save the outputs (or you can find the values in OCI):
