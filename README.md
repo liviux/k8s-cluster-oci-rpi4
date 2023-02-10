@@ -23,7 +23,7 @@ This section is for the OCI part of the cluster.
 
 ## Requirements
 
-- Obvious, an OCI account, get it from here - [oracle.com/cloud](https://www.oracle.com/cloud/). If you already have an account, be careful not to have any resources provisioned already (even for other users, or compartments), this tutorial will use all free-tier ones;
+- Obvious, an OCI account, get it from here - [oracle.com/cloud](https://www.oracle.com/cloud/). If you already have an account, be careful not to have any resources provisioned already (even for other users, or compartments), this tutorial will use all free-tier ones. Also be extra careful to pick a region not so popular, as it may have no resources available. Pick a region with enough ARM instances available. If during final steps, terraform is stuck, you can check in _OCI > Compute > Instance Pools_ > select your own > _Work requests_ , if there is _Failure _and in that log file there's an error _Out of host capacity_, then you must wait, even days until resources are freed. You can run a script from [here](https://github.com/hitrov/oci-arm-host-capacity) which will try to create instances until there's something available. When that happens, go fast to your OCI, delete all that was created and then run the terraform scripts;
 - I used Windows 11 with WSL2 running Ubuntu 20.04, but this will work on any Linux machine;
 - Terraform installed (tested with v1.3.7 - and OCI provider v4.105)- how to [here](https://developer.hashicorp.com/terraform/tutorials/aws-get-started/install-cli);
 
@@ -114,7 +114,7 @@ You will need to add some new values to the notes file:
 - Last is your email address that will be used to install a certification manager. That will be your _certmanager_email_address_ variable. I didn't setup one, as this is just a personal project for testing.
 
 After you've cloned the repo, go to oci/terraform.tfvars and edit all values with the ones from your notes file. 
-This build uses the great terraform configuration files from this repo of [garutilorenzo](https://github.com/garutilorenzo/k3s-oci-cluster) (using version 2.2; if you have errors running all of this, you should check what changed in this repo since v2.2, or 01.02.23). You can read [here](https://github.com/garutilorenzo/k3s-oci-cluster#pre-flight-checklist) if you want to customize your configuration and edit the _main.tf_ file. Compared to garutilorenzo's repo, this tutorial has 2 server nodes (the 3rd one will be one of Raspberry Pis) + 2 worker nodes, default ingress controller set as Traefik, and it's not build by default with Longhorn and ArgoCD (they will be installed later alongside other apps).   
+This build uses the great terraform configuration files from this repo of [garutilorenzo](https://github.com/garutilorenzo/k3s-oci-cluster) (using version 2.2; if you have errors running all of this, you should check what changed in this repo since v2.2, or 01.02.23). You can read [here](https://github.com/garutilorenzo/k3s-oci-cluster#pre-flight-checklist) if you want to customize your configuration and edit the _main.tf_ file. Compared to garutilorenzo's repo, this tutorial has 1 server node + 3 worker nodes, default ingress controller set as Traefik, and it's not build by default with Longhorn and ArgoCD (they will be installed later alongside other apps).   
 _*note_ - I've got some problems with clock of WSL2 not being synced to Windows clock. And provisioning didn't worked so if you receive clock errors too, verify your time with `date`command, if out of sync just run `sudo hwclock -s` or `sudo ntpdate time.windows.com`.
 Now just run `terraform plan` and then `terraform apply`. If everything was ok you should have your resources created.
 
@@ -149,7 +149,7 @@ This section is for the RPI4 part of the cluster.
 
 ## Requirements
 
-- At least 2 Raspberry Pi. I've got 4 of them, 3 with 4GB and 1 with 8GB (that will be my master node). Every one needs a SD Card, a power adapter plus network cables (plus an optional switch and 4 cases);
+- At least 2 Raspberry Pi. I've got 4 of them, 3 with 4GB and 1 with 8GB. Every one needs a SD Card, a power adapter plus network cables (plus an optional switch and 4 cases);
 - And the same from part 1. Windows 11 with WSL2 running Ubuntu 20.04, but this will work on any Linux & Win machine and Terraform installed (tested with v1.3.7)- how to [here](https://developer.hashicorp.com/terraform/tutorials/aws-get-started/install-cli);
 
 
