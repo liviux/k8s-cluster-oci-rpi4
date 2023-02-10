@@ -183,19 +183,19 @@ ssh-copy-id -i ~/.ssh/key.pub user@rpi4-4
 This will allow Ansible to connect to every Pi without requesting the password every time. 
 I had to uncomment with `sudo vi /etc/ansible/ansible.cfg` the line with `private_key_file = ~/.ssh/key`. And in /etc/ansible/hosts i added the following:
 ```
-[server]
+[big]
 rpi4-1  ansible_connection=ssh
 
-[agents]
+[small]
 rpi4-2  ansible_connection=ssh
 rpi4-3  ansible_connection=ssh
 rpi4-4  ansible_connection=ssh
 
 [home:children]
-server
-agents
+big
+small
 ```
-This will add the master rpi4 in a server group and the rest of workers to an agents group. Plus a bigger group having them all. My PC user and RPIs user is the same, but if you have a different one you have to add this to the same file:
+This will add the big rpi4 in a big group and the rest of workers to an small group. Plus a home group having them all. My PC user and RPIs user is the same, but if you have a different one you have to add this to the same file:
 ```
 [all:vars]
 remote_user = user
