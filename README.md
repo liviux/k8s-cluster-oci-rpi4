@@ -15,6 +15,10 @@ I've made a series of articles on [dev.to](https://dev.to/liviux/k8s-cluster-wit
       - [Requirements](#requirements-1)
       - [Preparing](#preparing-1)
       - [Ansible](#ansible)
+     - [Linking OCI with RPi4](#Linking-OCI-with-RPi4)
+       - [Preparing](#preparing2)
+       - [Netmaker](#netmaker)
+       - [Cluster](#cluster)
   - [References](#references)
 
 # OCI
@@ -303,7 +307,112 @@ _*note. Initially this cluster was planned with 3 server nodes, 2 from OCI and 1
 
 Now the fun part is linking the Raspberry Pi cluster to existing k3s cluster on OCI.
 
+## Preparing
+At this moment I added the OCI machines to the _C:\Windows\System32\drivers\etc\hosts_ file (WSL reads this file and updates it in it's _/etc/hosts_ file). Now my hosts looks like this:
+```
+...
+192.168.0.201   rpi4-1
+192.168.0.202   rpi4-2
+192.168.0.203   rpi4-3
+192.168.0.204   rpi4-4
+140.111.111.213 oci1
+140.112.112.35  oci2
+152.113.113.23  oci3
+140.114.114.22  oci4
+```
+And I added them to the Ansible file too (_/etc/ansible/hosts_). Now this file looks like this:
+```
+[big]
+rpi4-1  ansible_connection=ssh
+[small]
+rpi4-2  ansible_connection=ssh
+rpi4-3  ansible_connection=ssh
+rpi4-4  ansible_connection=ssh
+[home:children]
+big
+small
+[ocis]
+oci1    ansible_connection=ssh ansible_user=ubuntu
+[ociw]
+oci2   ansible_connection=ssh ansible_user=ubuntu
+oci3   ansible_connection=ssh ansible_user=ubuntu
+oci4   ansible_connection=ssh ansible_user=ubuntu
+[oci:children]
+ocis
+ociw
+[workers:children]
+big
+small
+ociw
+```
+It is not the best naming convention, but it works. Ansible reservers the naming _all_ so if I want to interact with all the objects I can always use `ansible -m command all`. Test it using `ansible -a "uname -a" all`. You should receive 8 responses with every Linux installed. Now you can even re-run the update ansible playbook created last part, to update OCI instances too.   
 
+K3s can work in multiple ways ([here](https://docs.k3s.io/architecture)), but for our tutorial we picked _High Availability with Embedded DB_ architecture. This one runs etcd instead of the default sqlite3 and so it's important to have an odd number of server nodes (from official documentation: "_An etcd cluster needs a majority of nodes, a quorum, to agree on updates to the cluster state. For a cluster with n members, quorum is (n/2)+1._") 
+Initially this cluster was planned with 3 server nodes, 2 from OCI and 1 from RPi4. But after reading issues [1](https://github.com/k3s-io/k3s/issues/2850) and [2](https://github.com/k3s-io/k3s/issues/6297) on Github, there are problems with etcd being on server nodes on different networks. So this cluster will have **1 server node** (this is how k3s names their master nodes): from OCI and **7 agent nodes** (this is how k3s names their worker nodes): 3 from OCI and 4 from RPi4.
+First we need to free some ports, so the OCI cluster can communicate with the RPi cluster. Go to _VCN > Security List_. You need to click on _Add Ingress Rule_. While I could only open the needed ports for k3s networking (listed [here](https://docs.k3s.io/installation/requirements#networking)), I decided to open all OCI ports toward my public IP only, as there is no risk involved here. So in _IP Protocol_ select _All Protocols_. Now you can test if everything if it worked by ssh to any RPi4 and try to ping any OCI machine or ssh to it or try another port.
+
+Now to link all of them together.
+We will create a VPN between all of them (and if you want to, plus local machine, plus VPS) using **Wireguard**. While Wireguard is not the hardest app to install and configure, there's an wonderful app that does almost everything by itself - Netmaker.
+
+## Netmaker
+
+On your VPS, or your local machine (if it has a static IP) run `sudo wget -qO /root/nm-quick-interactive.sh https://raw.githubusercontent.com/gravitl/netmaker/master/scripts/nm-quick-interactive.sh && sudo chmod +x /root/nm-quick-interactive.sh && sudo /root/nm-quick-interactive.sh` and follow all the steps. Select Community Edition (for max 50 nodes) and for the rest pick auto.
+Now you will have a dashboard at a auto-generated domain. Open that link that you received at the end of the installation in a browser and create a user and password.
+It should have created for you a network. Open _Network_ tab and then open the new network created. If you're ok with it, that's great. I changed the CIDR to something more fancier _10.20.30.0/24_ and activated _UDP Hole Punching_ for better connectivity over NAT. Now go to _Access Key Tab_, select your network and there you should have all your keys to connect.
+Netclient, the client for every machine, needs _wireguard_ and _systemd_ installed. Create a new ansible playbook _wireguard_install.yml_ and paste this:
+
+```
+---
+- hosts: all
+  tasks:
+  - name: Install wireguard
+    apt:
+      name:
+        - wireguard
+...
+
+```
+Now run `ansible-playbook wireguard_install.yml -K -b`. To check everything is ok until now run `ansible -a "wg --version" all` and then `ansible -a "systemd --version" all`.
+Create a new file _netclient_install.yml_ and add this:
+
+```
+---
+- hosts: server
+  tasks:
+  - name: Add the Netmaker GPG key
+    shell: curl -sL 'https://apt.netmaker.org/gpg.key' | sudo tee /etc/apt/trusted.gpg.d/netclient.asc
+
+  - name: Add the Netmaker repository
+    shell: curl -sL 'https://apt.netmaker.org/debian.deb.txt' | sudo tee /etc/apt/sources.list.d/netclient.list
+
+  - name: Update the package list
+    shell: apt update
+
+  - name: Install netclient
+    shell: apt install netclient
+...
+
+```
+Now run it as usual `ansible-playbook netclient_install.yml -K -b`. This will install _netclient_ on all hosts. To check, run `ansible -a "netclient --version" all`.
+Last step is easy. Just run `ansible -a "netclient join -t YOURTOKEN" -b -K`. For the part in brackets, copy your _Join Command_ from _Netmaker Dashboard > Access Key_. Now all hosts will share a network. This is mine, 11 machines (4 RPi4, 4 OCI instances, my VPS, my WSL and my Windows machine; last 3 are not needed).
+
+![netmaker network](https://dev-to-uploads.s3.amazonaws.com/uploads/articles/587lg95xqlle3e2i573n.png)
+
+## Cluster
+
+Ssh to the OCI server and run: first `sudo systemctl stop k3s`, then `sudo rm -rf /var/lib/rancher/k3s/server/db/etcd` and then reinstall but this time with `curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="--flannel-iface=nm-netmaker" sh -`.
+For agents will make an ansible playbook _workers_link.yml_ with following content:
+
+```
+---
+- hosts: workers
+  tasks:
+  - name: Install k3s on workers and link to server node
+    shell: curl -sfL https://get.k3s.io | K3S_URL=https://10.20.30.1:6443 K3S_TOKEN=MYTOKEN INSTALL_K3S_EXEC=--"flannel-iface=nm-netmaker" sh -v
+...
+```
+You have to paste the content from file on server `sudo cat /var/lib/rancher/k3s/server/node-token` as MYTOKEN, and change ip address of server if you have another. Now run it with `ansible-playbook ~/ansible/link/workers_link.yml -K -b`.
+Finally over. Go back to server node, run `sudo kubectl get nodes -owide` and you should have 8 results there, 1 master node and 7 worker nodes.
 
 
 
@@ -315,6 +424,6 @@ OCI Oracle documentation with Tutorials - [here](https://docs.oracle.com/en-us/i
 Great GitHub repo of garutilorenzo - [here](https://github.com/garutilorenzo/k3s-oci-cluster). There are a few others who can help you with k8s on OCI too [1](https://arnoldgalovics.com/free-kubernetes-oracle-cloud/) with [repo](https://github.com/galovics/free-kubernetes-oracle-cloud-terraform), [2](https://github.com/r0b2g1t/k3s-cluster-on-oracle-cloud-infrastructure), [3](https://github.com/solamarpreet/kubernetes-on-oci);  
 One of my old k3s install on Raspbbery PI article on LinkedIn - [here](https://www.linkedin.com/pulse/creating-arm-kubernetes-cluster-raspberry-pi-oracle-liviu-alexandru) - inspired from [braindose.blog](https://braindose.blog/2021/12/31/install-kubernetes-raspberry-pi/);   
 Ansible documentation - [here](https://docs.ansible.com/);  
-ChatGPT helped me a lot of time, use it [here](https://chat.openai.com/chat);  
 Etcd documentation -[here](https://etcd.io/docs/v3.5/faq/); more [here](https://www.siderolabs.com/blog/why-should-a-kubernetes-control-plane-be-three-nodes/) why 3 server nodes;  
-1
+Netmaker from [here](https://github.com/gravitl/netmaker) and documentation [here](https://netmaker.readthedocs.io/en/master/install.html);  
+ChatGPT helped me a lot of time, use it [here](https://chat.openai.com/chat).
