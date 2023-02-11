@@ -16,7 +16,7 @@ I've made a series of articles on [dev.to](https://dev.to/liviux/k8s-cluster-wit
       - [Preparing](#preparing-1)
       - [Ansible](#ansible)
      - [Linking OCI with RPi4](#Linking-OCI-with-RPi4)
-       - [Preparing](#preparing2)
+       - [Preparing](#preparing-2)
        - [Netmaker](#netmaker)
        - [Cluster](#cluster)
   - [References](#references)
@@ -299,8 +299,6 @@ Now the last step. Installing some apps on PIs. I'm still unsure if this is need
 ...
 ```
 Now run it with `ansible-playbook install.yml -K -b`.
-
-_*note. Initially this cluster was planned with 3 server nodes, 2 from OCI and 1 from RPi4. But after reading issues [1](https://github.com/k3s-io/k3s/issues/2850) and [2](https://github.com/k3s-io/k3s/issues/6297) on Github, there are problems with etcd being on server nodes on different networks. So I kept this guide with the current configuration as it can be used as a solo RPi4 cluster with 1 server node and 3 worker nodes._  
 
 
 # Linking OCI with RPi4
