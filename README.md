@@ -345,15 +345,14 @@ ociw
 ```
 It is not the best naming convention, but it works. Ansible reservers the naming _all_ so if I want to interact with all the objects I can always use `ansible -m command all`. Test it using `ansible -a "uname -a" all`. You should receive 8 responses with every Linux installed. Now you can even re-run the update ansible playbook created last part, to update OCI instances too.   
 
-K3s can work in multiple ways ([here](https://docs.k3s.io/architecture)), but for our tutorial we picked _High Availability with Embedded DB_ architecture. This one runs etcd instead of the default sqlite3 and so it's important to have an odd number of server nodes (from official documentation: "_An etcd cluster needs a majority of nodes, a quorum, to agree on updates to the cluster state. For a cluster with n members, quorum is (n/2)+1._") 
+K3s can work in multiple ways ([here](https://docs.k3s.io/architecture)), but for our tutorial we picked _High Availability with Embedded DB_ architecture. This one runs etcd instead of the default sqlite3 and so it's important to have an odd number of server nodes (from official documentation: "_An etcd cluster needs a majority of nodes, a quorum, to agree on updates to the cluster state. For a cluster with n members, quorum is (n/2)+1._").  
 Initially this cluster was planned with 3 server nodes, 2 from OCI and 1 from RPi4. But after reading issues [1](https://github.com/k3s-io/k3s/issues/2850) and [2](https://github.com/k3s-io/k3s/issues/6297) on Github, there are problems with etcd being on server nodes on different networks. So this cluster will have **1 server node** (this is how k3s names their master nodes): from OCI and **7 agent nodes** (this is how k3s names their worker nodes): 3 from OCI and 4 from RPi4.
-First we need to free some ports, so the OCI cluster can communicate with the RPi cluster. Go to _VCN > Security List_. You need to click on _Add Ingress Rule_. While I could only open the needed ports for k3s networking (listed [here](https://docs.k3s.io/installation/requirements#networking)), I decided to open all OCI ports toward my public IP only, as there is no risk involved here. So in _IP Protocol_ select _All Protocols_. Now you can test if everything if it worked by ssh to any RPi4 and try to ping any OCI machine or ssh to it or try another port.
-
-Now to link all of them together.
-We will create a VPN between all of them (and if you want to, plus local machine, plus VPS) using **Wireguard**. While Wireguard is not the hardest app to install and configure, there's an wonderful app that does almost everything by itself - Netmaker.
+First we need to free some ports, so the OCI cluster can communicate with the RPi cluster. Go to _VCN > Security List_. You need to click on _Add Ingress Rule_. While I could only open the needed ports for k3s networking (listed [here](https://docs.k3s.io/installation/requirements#networking)), I decided to open all OCI ports toward my public IP only, as there is no risk involved here. So in _IP Protocol_ select _All Protocols_. Now you can test if everything if it worked by ssh to any RPi4 and try to ping any OCI machine or ssh to it or try another port. (this port opening part is now optional, after adding the next step).
 
 ## Netmaker
 
+Now to link all of them together.
+We will create a VPN between all of them (and if you want to, plus local machine, plus VPS) using **Wireguard**. While Wireguard is not the hardest app to install and configure, there's an wonderful app that does almost everything by itself - **Netmaker**.
 On your VPS, or your local machine (if it has a static IP) run `sudo wget -qO /root/nm-quick-interactive.sh https://raw.githubusercontent.com/gravitl/netmaker/master/scripts/nm-quick-interactive.sh && sudo chmod +x /root/nm-quick-interactive.sh && sudo /root/nm-quick-interactive.sh` and follow all the steps. Select Community Edition (for max 50 nodes) and for the rest pick auto.
 Now you will have a dashboard at a auto-generated domain. Open that link that you received at the end of the installation in a browser and create a user and password.
 It should have created for you a network. Open _Network_ tab and then open the new network created. If you're ok with it, that's great. I changed the CIDR to something more fancier _10.20.30.0/24_ and activated _UDP Hole Punching_ for better connectivity over NAT. Now go to _Access Key Tab_, select your network and there you should have all your keys to connect.
@@ -398,7 +397,7 @@ Last step is easy. Just run `ansible -a "netclient join -t YOURTOKEN" -b -K`. Fo
 
 ## Cluster
 
-Ssh to the OCI server and run: first `sudo systemctl stop k3s`, then `sudo rm -rf /var/lib/rancher/k3s/server/db/etcd` and then reinstall but this time with `curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="--flannel-iface=nm-netmaker" sh -`.
+Ssh to the OCI server and run: first `sudo systemctl stop k3s`, then `sudo rm -rf /var/lib/rancher/k3s/server/db/etcd` and then reinstall but this time with `curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="--flannel-iface=nm-netmaker" INSTALL_K3S_CHANNEL=latest sh -`.
 For agents will make an ansible playbook _workers_link.yml_ with following content:
 
 ```
@@ -406,7 +405,7 @@ For agents will make an ansible playbook _workers_link.yml_ with following conte
 - hosts: workers
   tasks:
   - name: Install k3s on workers and link to server node
-    shell: curl -sfL https://get.k3s.io | K3S_URL=https://10.20.30.1:6443 K3S_TOKEN=MYTOKEN INSTALL_K3S_EXEC=--"flannel-iface=nm-netmaker" sh -v
+    shell: curl -sfL https://get.k3s.io | K3S_URL=https://10.20.30.1:6443 K3S_TOKEN=MYTOKEN INSTALL_K3S_EXEC=--"flannel-iface=nm-netmaker" INSTALL_K3S_CHANNEL=latest sh -v
 ...
 ```
 You have to paste the content from file on server `sudo cat /var/lib/rancher/k3s/server/node-token` as MYTOKEN, and change ip address of server if you have another. Now run it with `ansible-playbook ~/ansible/link/workers_link.yml -K -b`.
