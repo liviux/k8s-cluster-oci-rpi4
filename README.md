@@ -423,5 +423,5 @@ One of my old k3s install on Raspbbery PI article on LinkedIn - [here](https://w
 Ansible documentation - [here](https://docs.ansible.com/);  
 Etcd documentation -[here](https://etcd.io/docs/v3.5/faq/); more [here](https://www.siderolabs.com/blog/why-should-a-kubernetes-control-plane-be-three-nodes/) why 3 server nodes;  
 Netmaker from [here](https://github.com/gravitl/netmaker) and documentation [here](https://netmaker.readthedocs.io/en/master/install.html);  
-A great, huge turorial for running Kubernetes on Raspberry Pi - [here](https://rpi4cluster.com/);  
+A great, huge guide for running Kubernetes on Raspberry Pi - [here](https://rpi4cluster.com/);  
 ChatGPT helped me a lot of time, use it [here](https://chat.openai.com/chat).
