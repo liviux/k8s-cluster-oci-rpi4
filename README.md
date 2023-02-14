@@ -7,7 +7,7 @@ I've made a series of articles on [dev.to](https://dev.to/liviux/k8s-cluster-wit
 
 - [Kubernetes cluster with OCI free-tier and Raspberry Pi4](#kubernetes-cluster-with-oci-free-tier-and-raspberry-pi4)
 - [Table of Contents](#table-of-contents)
-    - [OCI](#oci)
+    - [OCI](#1.-oci)
       - [Requirements](#requirements)
       - [Preparing](#preparing)
       - [Provisioning](#provisioning)
@@ -21,7 +21,7 @@ I've made a series of articles on [dev.to](https://dev.to/liviux/k8s-cluster-wit
        - [Cluster](#cluster)
   - [References](#references)
 
-# OCI
+# 1. OCI
 
 This section is for the OCI part of the cluster.
 
