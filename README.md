@@ -15,12 +15,12 @@ I've made a series of articles on [dev.to](https://dev.to/liviux/k8s-cluster-wit
       - [Requirements](#requirements-1)
       - [Preparing](#preparing-1)
       - [Ansible](#ansible)
-     - [Linking OCI with RPi4](#3-Linking-OCI-with-RPi4)
+     - [Linking OCI with RPi4](#3-linking-oci-with-rpi4)
        - [Preparing](#preparing-2)
        - [Netmaker](#netmaker)
        - [Cluster](#cluster)
-      - [Others](#4-Others)
-  - [References](#references)
+     - [Others](#4-others)
+- [References](#references)
 
 # 1. OCI
 
