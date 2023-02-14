@@ -7,18 +7,19 @@ I've made a series of articles on [dev.to](https://dev.to/liviux/k8s-cluster-wit
 
 - [Kubernetes cluster with OCI free-tier and Raspberry Pi4](#kubernetes-cluster-with-oci-free-tier-and-raspberry-pi4)
 - [Table of Contents](#table-of-contents)
-    - [OCI](#1.-oci)
+    - [OCI](#1-oci)
       - [Requirements](#requirements)
       - [Preparing](#preparing)
       - [Provisioning](#provisioning)
-    - [Raspberry Pi4](#raspberry-pi4)
+    - [Raspberry Pi4](#2-raspberry-pi4)
       - [Requirements](#requirements-1)
       - [Preparing](#preparing-1)
       - [Ansible](#ansible)
-     - [Linking OCI with RPi4](#Linking-OCI-with-RPi4)
+     - [Linking OCI with RPi4](#3-Linking-OCI-with-RPi4)
        - [Preparing](#preparing-2)
        - [Netmaker](#netmaker)
        - [Cluster](#cluster)
+      - [Others](#4-Others)
   - [References](#references)
 
 # 1. OCI
@@ -147,7 +148,7 @@ public_lb_ip = tolist([
 ```
 Now you can connect to any worker or server IP using `ssh -i ~/.ssh/key ubuntu@152.x.x.115`. Connect to server IP and write `sudo kubectl get nodes` to check all nodes.
 
-# Raspberry Pi4
+# 2. Raspberry Pi4
 
 This section is for the RPI4 part of the cluster.
 
@@ -301,7 +302,7 @@ Now the last step. Installing some apps on PIs. I'm still unsure if this is need
 Now run it with `ansible-playbook install.yml -K -b`.
 
 
-# Linking OCI with RPi4
+# 3. Linking OCI with RPi4
 
 Now the fun part is linking the Raspberry Pi cluster to existing k3s cluster on OCI.
 
@@ -409,7 +410,9 @@ For agents will make an ansible playbook _workers_link.yml_ with following conte
 ...
 ```
 You have to paste the content from file on server `sudo cat /var/lib/rancher/k3s/server/node-token` as MYTOKEN, and change ip address of server if you have another. Now run it with `ansible-playbook ~/ansible/link/workers_link.yml -K -b`.
-Finally over. Go back to server node, run `sudo kubectl get nodes -owide` and you should have 8 results there, 1 master node and 7 worker nodes.
+Finally over. Go back to server node, run `sudo kubectl get nodes -owide` and you should have 8 results there, 1 master node and 7 worker nodes.  
+
+# 4. Others
 
 
 
