@@ -1,0 +1,13 @@
+---
+- hosts: home
+  tasks:
+  - name: Install some packages
+    apt:
+      name:
+        - curl
+        - gnupg2
+        - software-properties-common
+        - apt-transport-https
+        - ca-certificates
+        - linux-modules-extra-raspi
+...

@@ -1,0 +1,11 @@
+---
+- hosts: home
+  tasks:
+  - name: Append new lines to config.txt
+    blockinfile:
+      path: /boot/firmware/config.txt
+      block: |
+       gpu_mem=16
+       dtoverlay=disable-bt
+       dtoverlay=disable-wifi
+...

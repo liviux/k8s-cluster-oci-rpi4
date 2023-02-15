@@ -1,0 +1,6 @@
+---
+- hosts: workers
+  tasks:
+  - name: Install k3s on workers and link to server node
+    shell: curl -sfL https://get.k3s.io | K3S_URL=https://10.20.30.1:6443 K3S_TOKEN=K1080d0dfee31177d0f6640bc913885f1a79f256ec1cb9c3efef07bd46e67537d96::server:vVatXf4zWxbvGrNrqOLBG4MVyoWl97mFIsMbjRvejfp82nofoiLI4EC INSTALL_K3S_EXEC=--"flannel-iface=nm-netmaker" INSTALL_K3S_CHANNEL=latest sh -v
+...

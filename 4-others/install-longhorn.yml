@@ -1,0 +1,10 @@
+---
+- hosts: all
+  tasks:
+  - name: Install some package for Longhorns
+    apt:
+      name:
+        - nfs-common
+        - open-iscsi
+        - util-linux
+...

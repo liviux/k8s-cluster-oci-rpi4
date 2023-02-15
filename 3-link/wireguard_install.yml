@@ -1,0 +1,8 @@
+---
+- hosts: all
+  tasks:
+  - name: Install wireguard
+    apt:
+      name:
+        - wireguard
+...

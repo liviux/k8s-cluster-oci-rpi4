@@ -1,0 +1,15 @@
+---
+- hosts: all
+  tasks:
+  - name: Add the Netmaker GPG key
+    shell: curl -sL 'https://apt.netmaker.org/gpg.key' | sudo tee /etc/apt/trusted.gpg.d/netclient.asc
+
+  - name: Add the Netmaker repository
+    shell: curl -sL 'https://apt.netmaker.org/debian.deb.txt' | sudo tee /etc/apt/sources.list.d/netclient.list
+
+  - name: Update the package list
+    shell: apt update
+
+  - name: Install netclient
+    shell: apt install netclient
+...
