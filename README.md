@@ -41,9 +41,6 @@ This section is for the OCI part of the cluster.
 
 ## Preparing
 
-_(following official guidelines from [Oracle](https://docs.oracle.com/en-us/iaas/developer-tutorials/tutorials/tf-provider/01-summary.htm))_
-
-
 For safety we should use a separate compartment and user for our OCI configuration, not root ones. Now is a good time to create a new notes file and add some values there, you will need them later. Mostly you will add 3 things for each value (user + user_name_you_created + it's_OCID; group  ... etc.).
 Go to **Identity & Security > Compartments** and click on **Create Compartment**. Open it and copy the **OCID** to your notes file. Then in **Identity & Security > Users** click on **Create User**. Open it and copy the **OCID** to your notes file.
 Then in **Identity & Security > Groups** click on **Create Group**. The same as above with the **OCID**. Here click on **Add User to Group** and add the newly created user.
@@ -121,12 +118,12 @@ Now you should run `terraform init` to download the OCI provider and then `terra
 You will need to add some new values to the notes file:
 - From inside OCI, on top right corner, click on **Developer Tools > Cloud Shell** and there write `oci iam availability-domain list`. Save the name, not id (if more than 1, pick one). This is your _availability_domain_ variable;
 - Again from this console type `oci compute image list --compartment-id <YOUR-COMPARTMENT> --operating-system "Canonical Ubuntu" --operating-system-version "22.04 Minimal aarch64" --shape "VM.Standard.A1.Flex"`, to find the OS Image ID. Probably the first result has the latest build, in my case was _Canonical-Ubuntu-22.04-Minimal-aarch64-2022.11.05-0_. From here save the id. This is your _os_image_id_ variable;
-- Now just google "_my ip_" and you will find your Public IP. Save it in CIDR format, ex. _111.222.111.99/32_. This is your _my_public_ip_cidr_ variable. I use a cheap VPS just to have a static IP. If you don't have a static IPv4 from your ISP, i don't know a quick solution for you, maybe someone can comment one. You can setup DDNS, but that can't be used in Security List afaik. Only solution every time your IP changes, go to **VCN >  Security List** and modify the **Ingress rule** with the new IP;
+- Now just google "_my ip_" and you will find your Public IP. Save it in CIDR format, ex. _111.222.111.99/32_. This is your _my_public_ip_cidr_ variable. I use a cheap VPS just to have a static IP. If you don't have a static IPv4 from your ISP, i don't know a quick solution for you, maybe someone can comment one. You can setup DDNS, but that can't be used in Security List afaik. Only solution every time your IP changes, go to **VCN >  Security List** and modify the **Ingress rule** with the new IP (or set te Ingress to 0.0.0.0/0 and al trafiic will be permited, but bye bye security);
 - Your _public_key_path_ is your public SSH keys. If you don't have any, quickly generate them with `ssh-keygen`. You should have one now in _~/.ssh/key.pub_ (I copied the private key, using `scp` to the VPS, so I can connect to OCI from local machine and from VPS);
 - Last is your email address that will be used to install a certification manager. That will be your _certmanager_email_address_ variable. I didn't setup one, as this is just a personal project for testing.
 
 After you've cloned the repo, go to oci/terraform.tfvars and edit all values with the ones from your notes file. 
-This build uses the great terraform configuration files from this repo of [garutilorenzo](https://github.com/garutilorenzo/k3s-oci-cluster) (using version 2.2; if you have errors running all of this, you should check what changed in this repo since v2.2, or 01.02.23). You can read [here](https://github.com/garutilorenzo/k3s-oci-cluster#pre-flight-checklist) if you want to customize your configuration and edit the _main.tf_ file. Compared to garutilorenzo's repo, this tutorial has 1 server node + 3 worker nodes, default ingress controller set as Traefik, and it's not build by default with Longhorn and ArgoCD (they will be installed later alongside other apps).   
+This build uses the great terraform configuration files from this repo of [garutilorenzo](https://github.com/garutilorenzo/k3s-oci-cluster) (if you have errors running all of this, you should check what changed in this repo since 01.02.23). You can read [here](https://github.com/garutilorenzo/k3s-oci-cluster#pre-flight-checklist) if you want to customize your configuration and edit the _main.tf_ file. Compared to garutilorenzo's repo, this tutorial has 1 server node + 3 worker nodes, default ingress controller set as Traefik, and it's not build by default with Longhorn and ArgoCD (they will be installed later alongside other apps).   
 _*note_ - I've got some problems with clock of WSL2 not being synced to Windows clock. And provisioning didn't worked so if you receive clock errors too, verify your time with `date`command, if out of sync just run `sudo hwclock -s` or `sudo ntpdate time.windows.com`.
 Now just run `terraform plan` and then `terraform apply`. If everything was ok you should have your resources created.
 
@@ -162,7 +159,7 @@ This section is for the RPI4 part of the cluster.
 ## Requirements
 
 - At least 2 Raspberry Pi. I've got 4 of them, 3 with 4GB and 1 with 8GB. Every one needs a SD Card, a power adapter plus network cables (plus an optional switch and 4 cases);
-- And the same from part 1. Windows 11 with WSL2 running Ubuntu 20.04, but this will work on any Linux & Win machine and Terraform installed (tested with v1.3.7)- how to [here](https://developer.hashicorp.com/terraform/tutorials/aws-get-started/install-cli);
+- And the same from part 1. Windows 11 with WSL2 running Ubuntu 20.04, but this will work on any Linux & Win machine)  
 
 
 ![my setup](https://dev-to-uploads.s3.amazonaws.com/uploads/articles/0edbmj9h7vt1ls8805nd.jpg)My Pis
@@ -355,7 +352,7 @@ It is not the best naming convention, but it works. Ansible reservers the naming
 
 K3s can work in multiple ways ([here](https://docs.k3s.io/architecture)), but for our tutorial we picked _High Availability with Embedded DB_ architecture. This one runs etcd instead of the default sqlite3 and so it's important to have an odd number of server nodes (from official documentation: "_An etcd cluster needs a majority of nodes, a quorum, to agree on updates to the cluster state. For a cluster with n members, quorum is (n/2)+1._").  
 Initially this cluster was planned with 3 server nodes, 2 from OCI and 1 from RPi4. But after reading issues [1](https://github.com/k3s-io/k3s/issues/2850) and [2](https://github.com/k3s-io/k3s/issues/6297) on Github, there are problems with etcd being on server nodes on different networks. So this cluster will have **1 server node** (this is how k3s names their master nodes): from OCI and **7 agent nodes** (this is how k3s names their worker nodes): 3 from OCI and 4 from RPi4.
-First we need to free some ports, so the OCI cluster can communicate with the RPi cluster. Go to _VCN > Security List_. You need to click on _Add Ingress Rule_. While I could only open the needed ports for k3s networking (listed [here](https://docs.k3s.io/installation/requirements#networking)), I decided to open all OCI ports toward my public IP only, as there is no risk involved here. So in _IP Protocol_ select _All Protocols_. Now you can test if everything if it worked by ssh to any RPi4 and try to ping any OCI machine or ssh to it or try another port. (this port opening part is now optional, after adding the next step).
+First we need to free some ports, so the OCI cluster can communicate with the RPi cluster. Go to _VCN > Security List_. You need to click on _Add Ingress Rule_. While I could only open the needed ports for k3s networking (listed [here](https://docs.k3s.io/installation/requirements#networking)), I decided to open all OCI ports toward my public IP only, as there is no risk involved here. So in _IP Protocol_ select _All Protocols_. Now you can test if everything is working by ssh to any RPi4 and try to ping any OCI machine or ssh to it or try another port. (this port opening part is now optional, after adding the next step).
 
 ## Netmaker
 
@@ -405,7 +402,7 @@ Last step is easy. Just run `ansible -a "netclient join -t YOURTOKEN" -b -K`. Fo
 
 ## Cluster
 
-Ssh to the OCI server and run: first `sudo systemctl stop k3s`, then `sudo rm -rf /var/lib/rancher/k3s/server/db/etcd` and then reinstall but this time with `curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="--flannel-iface=nm-netmaker" INSTALL_K3S_CHANNEL=latest sh -`.
+Ssh to the OCI server and run: first `sudo systemctl stop k3s`, then `sudo rm -rf /var/lib/rancher/k3s/server/db/etcd` and then reinstall but this time with `curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="--flannel-iface=nm-netmaker" INSTALL_K3S_CHANNEL=latest sh -`.(i think it's possible just to re-run the installation, without the extra 2 commands before).
 For agents will make an ansible playbook _workers_link.yml_ with following content:
 
 ```
@@ -571,4 +568,5 @@ Ansible documentation - [here](https://docs.ansible.com/);
 Etcd documentation -[here](https://etcd.io/docs/v3.5/faq/); more [here](https://www.siderolabs.com/blog/why-should-a-kubernetes-control-plane-be-three-nodes/) why 3 server nodes;  
 Netmaker from [here](https://github.com/gravitl/netmaker) and documentation [here](https://netmaker.readthedocs.io/en/master/install.html);  
 A great, huge guide for running Kubernetes on Raspberry Pi - [here](https://rpi4cluster.com/);  
+For every app installed search for the official documentation;
 ChatGPT helped me a lot of time, use it [here](https://chat.openai.com/chat).
