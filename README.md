@@ -531,8 +531,9 @@ spec:
       targetPort: http
 ```
 Run it with `kubectl apply -f longhorn-service.yaml`. Now you can access the Longhorn Dashboard in your browser in _10.20.30.1:port_ (or any of your nodes IPs). The port you get it from running `bectl describe svc longhorn-ingress-lb -n longhorn-system | grep NodePort`
-Now to make Longhorn default StorageClass. Run `kubectl patch storageclass local-path -p '{"metadata": {"annotations":{"storageclass.kubernetes.io/is-default-class":"false"}}}'` and now you should have only one default in `kubectl get storageclass`.
-##Portainer
+Now to make Longhorn default StorageClass. Run `kubectl patch storageclass local-path -p '{"metadata": {"annotations":{"storageclass.kubernetes.io/is-default-class":"false"}}}'` and now you should have only one default in `kubectl get storageclass`.  
+
+## Portainer
 This app is a container management platform. We'll be installed using again helm. Run `helm repo add portainer https://portainer.github.io/k8s/` and then `helm repo update`.
 Now just run `helm install --create-namespace -n portainer portainer portainer/portainer`. You can acces portainer UI from 10.20.30.1:30777 (or any other IP from your Wireguard network 10.20.30.1 - 10.20.30.8 :30777). It uses 10 GB, check with `kubectl get pvc -n portainer` (you can check in your Longhorn Dashboard the new volume created). There you will create a user and password. This is what I have after clicking on _Get Started_:
 
