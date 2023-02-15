@@ -418,7 +418,7 @@ Finally over. Go back to server node, run `sudo kubectl get nodes -owide` and yo
 
 # 4. Other Apps
 
-I'll just install the apps and access them. But you need to configure to use all of them.  
+I'll just install the apps and show how to access them. But you need to configure and run some demo apps to learn how to use them.  
 
 ## Lens
 First thing installed is a beautiful dashboard - [Lens](https://k8slens.dev/). Install the desktop app on your PC, go to _File > Add Cluster_. You have to paste here all that you receive when running `kubectl config view --minify --raw` on server. Edit _127.0.0.1:6443_ from that result with your server IP, in my case _10.20.30.1:6443_.
@@ -466,7 +466,7 @@ Arkade is an Open Source marketplace For Kubernetes. Installation is just `curl 
 
 ## Bash completion
 
-To run commands faster and easier you can use auto-completion for kubectl. Run `apt install bash-completion` and then `echo 'source <(kubectl completion bash)' >>~/.bashrc`. Now after every kubectl you can hit tab and it will autocomplete for you. Try with a running pod, just write `kubectl get pod` and hit TAB.
+To run commands faster and easier you can use auto-completion for kubectl. Run `apt install bash-completion` and then `echo 'source <(kubectl completion bash)' >>~/.bashrc`. Reinitialize bash with `bash` command. Now after every kubectl you can hit tab and it will autocomplete for you. Try with a running pod, just write `kubectl get pod` and hit TAB.
 
 ## Traefik dashboard
 First write a yaml file _traefik-crd.yaml_ and apply it. It should have this content:
@@ -491,7 +491,7 @@ spec:
       kubernetesCRD:
         allowCrossNamespace: true
 ```
-This should be available at _http://10.20.30.4:9000/dashboard/#/_ in your browser (or any ip from those 8 that are nodes).
+Dashboard should be available at _http://10.20.30.4:9000/dashboard/#/_ in your browser (or any ip from those 8 that are nodes).
 
 ## Longhorn
 Longhorn is a cloud native distributed block storage for Kubernetes. First create a new _install-longhorn.yml_ file for Ansible playbook. Paste in it :
@@ -508,7 +508,7 @@ Longhorn is a cloud native distributed block storage for Kubernetes. First creat
         - util-linux
 ...
 ```
-Run it with `ansible-playbook install-longhorn.yml -K -b` to install some extra components on nodes. Now run `ansible -a "lsblk -f" all` to find what are the names of the drives.
+Run it with `ansible-playbook install-longhorn.yml -K -b` to install some extra components on nodes.  
 Move to server. Run `helm repo add longhorn https://charts.longhorn.io` then `helm repo update`
 and then `helm install longhorn longhorn/longhorn --namespace longhorn-system --create-namespace`. It will last a while, ~7 minutes. Now create a _longhorn-service.yaml_ file and paste this:
 ```
@@ -527,7 +527,7 @@ spec:
       port: 80
       targetPort: http
 ```
-Run it with `kubectl apply -f longhorn-service.yaml`. Now you can access the Longhorn Dashboard in your browser in _10.20.30.1:port_ (or any of your nodes IPs). The port you get it from running `bectl describe svc longhorn-ingress-lb -n longhorn-system | grep NodePort`
+Run it with `kubectl apply -f longhorn-service.yaml`. Now you can access the Longhorn Dashboard in your browser in _10.20.30.1:port_ (or any of your nodes IPs). The port you get it from running `kubectl describe svc longhorn-ingress-lb -n longhorn-system | grep NodePort`
 Now to make Longhorn default StorageClass. Run `kubectl patch storageclass local-path -p '{"metadata": {"annotations":{"storageclass.kubernetes.io/is-default-class":"false"}}}'` and now you should have only one default in `kubectl get storageclass`.  
 
 ## Portainer
@@ -538,10 +538,10 @@ Now just run `helm install --create-namespace -n portainer portainer portainer/p
 
 ## ArgoCD
 Argo CD is a declarative, GitOps continuous delivery tool for Kubernetes.
-Installation very easy with `kubectl create namespace argocd` then `kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml` and wait a few minutes, or check progress with `kubectl get all -n argocd`. Now to access the UI run `kubectl patch svc argocd-server -n argocd -p '{"spec": {"type": "LoadBalancer"}}'`. Find your port with `kubectl describe service/argocd-server -n argocd | grep NodePort` and access the UI from 10.20.30.1:port (or another IP form your network). User is _admin _and password is stored in `kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d; echo`.
+Installation very easy with `kubectl create namespace argocd` then `kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml` and wait a few minutes, or check progress with `kubectl get all -n argocd`. Now to access the UI run `kubectl patch svc argocd-server -n argocd -p '{"spec": {"type": "LoadBalancer"}}'`. Find your port with `kubectl describe service/argocd-server -n argocd | grep NodePort` and access the UI from 10.20.30.1:port (or another IP form your network). User is _admin_ and password is stored in `kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d; echo`.
 
 ## Prometheus & Grafana 
-Prometheus is probably the best monitoring system out there and Grafana will be used as it's dashboard. Will be installed from the ArgoCD UI using a official helm chart _kube-prometheus-stack_ . Open _Applications_ and click _New App_. Edit:
+Prometheus is my favorite metrics system from CNCF Landascape and Grafana will be used as it's dashboard. They will be installed from the ArgoCD UI using a official helm chart _kube-prometheus-stack_ . Open _Applications_ and click _New App_. Edit:
 - App Name : _kube-prometheus-stack_
 - Project Name : _default_
 - Sync Policy : _Automatic_
@@ -555,7 +555,7 @@ Prometheus is probably the best monitoring system out there and Grafana will be 
 - prometheusOperator.service.type : _LoadBalancer_
 - grafana.ingress.enabled : _true_.
 
-Now hit _Create_. We configured the services as _LoadBalancer_, because by default they are _ClusterIP_ and if you wanted to access them you have to do port-forwarding every time. You can acces the Prometheus UI from node:port (port you get it with `kubectl describe svc kube-prometheus-stack-prometheus -n kube-prometheus-stack | grep NodePort`). The same for Prometheus Alert Manager (get port with `kubectl describe svc kube-prometheus-stack-alertmanager -n kube-prometheus-stack | grep NodePort`). For Grafana Dashboard you need to go to any _nodeIP/kube-prometheus-stack-grafana:80_. User is admin and password get it with `kubectl get secret --namespace kube-prometheus-stack kube-prometheus-stack-grafana -o jsonpath='{.data.admin-password}' | base64 -d`.
+Now hit _Create_. We configured the services as _LoadBalancer_, because by default they are _ClusterIP_ and if you wanted to access them you have to do port-forwarding every time. You can acces the Prometheus UI from any-node:port (port you get it with `kubectl describe svc kube-prometheus-stack-prometheus -n kube-prometheus-stack | grep NodePort`). The same for Prometheus Alert Manager (get port with `kubectl describe svc kube-prometheus-stack-alertmanager -n kube-prometheus-stack | grep NodePort`). For Grafana Dashboard you need to go to  _any-nodeIP/kube-prometheus-stack-grafana:80_. User is admin and password get it with `kubectl get secret --namespace kube-prometheus-stack kube-prometheus-stack-grafana -o jsonpath='{.data.admin-password}' | base64 -d`.
 
 # References
     
