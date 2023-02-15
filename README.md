@@ -22,13 +22,11 @@ I've made a series of articles on [dev.to](https://dev.to/liviux/k8s-cluster-wit
      - [Other Apps](#4-other-apps)
        - [Lens](#lens)
        - [MetalLB](#metallb)
-       - [Helm](#helm)
-       - [Arkade](#arkade)
+       - [Helm & Arkade](#helm&arkade)
        - [Longhorn](#longhorn)
        - [Portainer](#portainer)
        - [ArgoCD](#argocd)
        - [Prometheus & Grafana](#prometheus&grafana)
-
 - [References](#references)
 
 # 1. OCI
