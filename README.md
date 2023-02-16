@@ -402,7 +402,14 @@ Last step is easy. Just run `ansible -a "netclient join -t YOURTOKEN" -b -K`. Fo
 
 ## Cluster
 
-Ssh to the OCI server and run: first `sudo systemctl stop k3s`, then `sudo rm -rf /var/lib/rancher/k3s/server/db/etcd` and then reinstall but this time with `curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="--flannel-iface=nm-netmaker --disable=servicelb" INSTALL_K3S_CHANNEL=latest sh -`.(i think it's possible just to re-run the installation, without the extra 2 commands before).
+Ssh to the OCI server and run: first `sudo systemctl stop k3s`, then `sudo rm -rf /var/lib/rancher/k3s/server/db/etcd` and then reinstall but this time with `curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="--flannel-iface=nm-netmaker --disable=servicelb" INSTALL_K3S_CHANNEL=latest sh -`.  
+Note: I think it's possible just to re-run the installation, without the extra 2 commands before. Or i think it's possible just to append the 2 lines to end of file _/etc/systemd/system/k3s.service_ (just the last 2 lines - after that run `sudo systemctl daemon-reload` and `sudo systemctl restart k3s`):
+```
+ExecStart=/usr/local/bin/k3s \
+    server \
+        '--flannel-iface=nm-netmaker' \
+        '--disable=servicelb' \
+```
 For agents will make an ansible playbook _workers_link.yml_ with following content:
 
 ```
