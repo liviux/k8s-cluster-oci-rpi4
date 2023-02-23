@@ -31,7 +31,7 @@ I've made a series of articles on [dev.to](https://dev.to/liviux/k8s-cluster-wit
 
 # 1. OCI
 
-This section is for the OCI part of the cluster.
+This section is for the Oracle Cloud Infrastructure (OCI) part of the cluster.
 
 ## Requirements
 
@@ -154,7 +154,7 @@ Now you can connect to any worker or server IP using `ssh -i ~/.ssh/key ubuntu@1
 
 # 2. Raspberry Pi4
 
-This section is for the RPI4 part of the cluster.
+This section is for the Raspberry PI 4 (RPI4) part of the cluster.
 
 ## Requirements
 
