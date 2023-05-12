@@ -37,7 +37,7 @@ This section is for the Oracle Cloud Infrastructure (OCI) part of the cluster.
 
 - Obvious, an OCI account, get it from here - [oracle.com/cloud](https://www.oracle.com/cloud/). If you already have an account, be careful not to have any resources provisioned already (even for other users, or compartments), this tutorial will use all free-tier ones. Also be extra careful to pick a region not so popular, as it may have no resources available. Pick a region with enough ARM instances available. If during final steps, terraform is stuck, you can check in _OCI > Compute > Instance Pools_ > select your own > _Work requests_ , if there is _Failure _and in that log file there's an error _Out of host capacity_, then you must wait, even days until resources are freed. You can run a script from [here](https://github.com/hitrov/oci-arm-host-capacity) which will try to create instances until there's something available. When that happens, go fast to your OCI, delete all that was created and then run the terraform scripts;
 - I used Windows 11 with WSL2 running Ubuntu 20.04, but this will work on any Linux machine;
-- Terraform installed (tested with v1.3.7 - and OCI provider v4.105)- how to [here](https://developer.hashicorp.com/terraform/tutorials/aws-get-started/install-cli);
+- Terraform installed (tested with v1.4.6 - and OCI provider v4.120.0)- how to [here](https://developer.hashicorp.com/terraform/tutorials/aws-get-started/install-cli);
 
 ## Preparing
 
@@ -85,7 +85,7 @@ terraform {
   required_providers {
     oci = {
       source  = "oracle/oci"
-      version = "4.105.0"
+      version = "4.120.0"
     }
   }
 }
