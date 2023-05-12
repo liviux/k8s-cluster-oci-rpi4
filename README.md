@@ -150,7 +150,8 @@ public_lb_ip = tolist([
     "is_public" = false
     "reserved_ip" = tolist([])
 ```
-Now you can connect to any worker or server IP using `ssh -i ~/.ssh/key ubuntu@152.x.x.115`. Connect to server IP and write `sudo kubectl get nodes` to check all nodes.
+Now you can connect to any worker or server IP using `ssh -i ~/.ssh/key ubuntu@152.x.x.115`. Connect to server IP and write `sudo kubectl get nodes` to check all nodes.  
+My cluster broke a lot of times. It's a testing one. Just delete all the resources in your compartment (go to _Governance & Administration > Tenancy Management > Tenancy Explorer_), one by one. The VCN in particular will be hard to delete, good luck. And then just restart `terraform apply` (if you are lucky and there are available resources).
 
 # 2. Raspberry Pi4
 
