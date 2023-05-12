@@ -47,7 +47,7 @@ Then in **Identity & Security > Groups** click on **Create Group**. The same as 
 In **Identity & Security > Policies** click on **Create Policy**, **Show manual editor** and add the following 
 
 ```
-allow group group_you_created to read all-resources in <compartment compartment_you_created>
+allow group group_you_created to read all-resources in compartment <<compartment_you_created>
 allow group group_you_created to manage virtual-network-family  in compartment <compartment_you_created>
 allow group group_you_created to manage instance-family  in compartment <compartment_you_created>
 allow group group_you_created to manage compute-management-family  in compartment <compartment_you_created>
