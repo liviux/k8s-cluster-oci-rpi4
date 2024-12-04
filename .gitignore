@@ -37,3 +37,4 @@ terraform.rc
 *.bak
 
 .terraform.lock.hcl
+.vscode/
