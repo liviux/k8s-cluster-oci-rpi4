@@ -30,13 +30,13 @@ This tutorial provides a detailed guide for deploying a Kubernetes cluster (usin
 
 # 1. OCI
 
-This section is for the OCI part of the cluster.
+This section is for the Oracle Cloud Infrastructure (OCI) part of the cluster.
 
 ## Requirements
 
 - Obvious, an OCI account, get it from here - [oracle.com/cloud](https://www.oracle.com/cloud/). If you already have an account, be careful not to have any resources provisioned already (even for other users, or compartments), this tutorial will use all free-tier ones. Also be extra careful to pick a region not so popular, as it may have no resources available. Pick a region with enough ARM instances available. If during final steps, terraform is stuck, you can check in _OCI > Compute > Instance Pools_ > select your own > _Work requests_ , if there is _Failure _and in that log file there's an error _Out of host capacity_, then you must wait, even days until resources are freed. You can run a script from [here](https://github.com/hitrov/oci-arm-host-capacity) which will try to create instances until there's something available. When that happens, go fast to your OCI, delete all that was created and then run the terraform scripts;
 - I used Windows 11 with WSL2 running Ubuntu 20.04, but this will work on any Linux machine;
-- Terraform installed (tested with v1.3.7 - and OCI provider v4.105)- how to [here](https://developer.hashicorp.com/terraform/tutorials/aws-get-started/install-cli);
+- Terraform installed (tested with v1.4.6 - and OCI provider v4.120.0)- how to [here](https://developer.hashicorp.com/terraform/tutorials/aws-get-started/install-cli);
 
 ## Preparing
 
@@ -46,16 +46,16 @@ Then in **Identity & Security > Groups** click on **Create Group**. The same as 
 In **Identity & Security > Policies** click on **Create Policy**, **Show manual editor** and add the following 
 
 ```
-allow group group_you_created to read all-resources in <compartment compartment_you_created>
-allow group group_you_created to manage virtual-network-family  in compartment <compartment_you_created>
-allow group group_you_created to manage instance-family  in compartment <compartment_you_created>
-allow group group_you_created to manage compute-management-family  in compartment <compartment_you_created>
-allow group group_you_created to manage volume-family  in compartment <compartment_you_created>
-allow group group_you_created to manage load-balancers  in compartment <compartment_you_created>
-allow group group_you_created to manage network-load-balancers  in compartment <compartment_you_created>
-allow group group_you_created to manage dynamic-groups in compartment <compartment_you_created>
-allow group group_you_created to manage policies in compartment <compartment_you_created>
-allow group group_you_created to manage dynamic-groups in tenancy
+allow group <<group_you_created>> to read all-resources in compartment <<compartment_you_created>
+allow group <<group_you_created>> to manage virtual-network-family  in compartment <compartment_you_created>
+allow group <<group_you_created>> to manage instance-family  in compartment <compartment_you_created>
+allow group <<group_you_created>> to manage compute-management-family  in compartment <compartment_you_created>
+allow group <<group_you_created>> to manage volume-family  in compartment <compartment_you_created>
+allow group <<group_you_created>> to manage load-balancers  in compartment <compartment_you_created>
+allow group <<group_you_created>> to manage network-load-balancers  in compartment <compartment_you_created>
+allow group <<group_you_created>> to manage dynamic-groups in compartment <compartment_you_created>
+allow group <<group_you_created>> to manage policies in compartment <compartment_you_created>
+allow group <<group_you_created>> to manage dynamic-groups in tenancy
 ```
 
 
@@ -84,7 +84,7 @@ terraform {
   required_providers {
     oci = {
       source  = "oracle/oci"
-      version = "4.105.0"
+      version = "4.120.0"
     }
   }
 }
@@ -122,7 +122,7 @@ You will need to add some new values to the notes file:
 - Last is your email address that will be used to install a certification manager. That will be your _certmanager_email_address_ variable. I didn't setup one, as this is just a personal project for testing.
 
 After you've cloned the repo, go to oci/terraform.tfvars and edit all values with the ones from your notes file. 
-This build uses the great terraform configuration files from this repo of [garutilorenzo](https://github.com/garutilorenzo/k3s-oci-cluster) (if you have errors running all of this, you should check what changed in this repo since 01.02.23). You can read [here](https://github.com/garutilorenzo/k3s-oci-cluster#pre-flight-checklist) if you want to customize your configuration and edit the _main.tf_ file. Compared to garutilorenzo's repo, this tutorial has 1 server node + 3 worker nodes, default ingress controller set as Traefik, and it's not build by default with Longhorn and ArgoCD (they will be installed later alongside other apps).   
+This build uses the great terraform configuration files from this repo of [garutilorenzo](https://github.com/garutilorenzo/k3s-oci-cluster) (if you have errors running all of this, you should check what changed in this repo since 12.05.23). You can read [here](https://github.com/garutilorenzo/k3s-oci-cluster#pre-flight-checklist) if you want to customize your configuration and edit the _main.tf_ file. Compared to garutilorenzo's repo, this tutorial has 1 server node + 3 worker nodes, default ingress controller set as Traefik, and it's not build by default with Longhorn and ArgoCD (they will be installed later alongside other apps).   
 _*note_ - I've got some problems with clock of WSL2 not being synced to Windows clock. And provisioning didn't worked so if you receive clock errors too, verify your time with `date`command, if out of sync just run `sudo hwclock -s` or `sudo ntpdate time.windows.com`.
 Now just run `terraform plan` and then `terraform apply`. If everything was ok you should have your resources created.
 
@@ -149,11 +149,12 @@ public_lb_ip = tolist([
     "is_public" = false
     "reserved_ip" = tolist([])
 ```
-Now you can connect to any worker or server IP using `ssh -i ~/.ssh/key ubuntu@152.x.x.115`. Connect to server IP and write `sudo kubectl get nodes` to check all nodes.
+Now you can connect to any worker or server IP using `ssh -i ~/.ssh/key ubuntu@152.x.x.115`. Connect to server IP and write `sudo kubectl get nodes` to check all nodes.  
+My cluster broke a lot of times. It's a testing one. Just delete all the resources in your compartment (go to _Governance & Administration > Tenancy Management > Tenancy Explorer_), one by one (or you could run `terraform destroy`, but it doesn't always work). The VCN in particular will be hard to delete, good luck. And then just restart `terraform apply` (if you are lucky and there are available resources).
 
 # 2. Raspberry Pi4
 
-This section is for the RPI4 part of the cluster.
+This section is for the Raspberry PI 4 (RPI4) part of the cluster.
 
 ## Requirements
 
@@ -401,7 +402,14 @@ Last step is easy. Just run `ansible -a "netclient join -t YOURTOKEN" -b -K`. Fo
 
 ## Cluster
 
-Ssh to the OCI server and run: first `sudo systemctl stop k3s`, then `sudo rm -rf /var/lib/rancher/k3s/server/db/etcd` and then reinstall but this time with `curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="--flannel-iface=nm-netmaker" INSTALL_K3S_CHANNEL=latest sh -`.(i think it's possible just to re-run the installation, without the extra 2 commands before).
+Ssh to the OCI server and run: first `sudo systemctl stop k3s`, then `sudo rm -rf /var/lib/rancher/k3s/server/db/etcd` and then reinstall but this time with `curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="--flannel-iface=nm-netmaker --disable=servicelb" INSTALL_K3S_CHANNEL=latest sh -`.  
+Note: I think it's possible just to re-run the installation, without the extra 2 commands before. Or i think it's possible just to append the 2 lines to end of file _/etc/systemd/system/k3s.service_ (just the last 2 lines - after that run `sudo systemctl daemon-reload` and `sudo systemctl restart k3s`):
+```
+ExecStart=/usr/local/bin/k3s \
+    server \
+        '--flannel-iface=nm-netmaker' \
+        '--disable=servicelb' \
+```
 For agents will make an ansible playbook _workers_link.yml_ with following content:
 
 ```
