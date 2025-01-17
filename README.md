@@ -139,11 +139,11 @@ You'll need to add a few more values to your notes file:
 -   Your `public_key_path` is the path to your public SSH key. If you don't have one, generate it with `ssh-keygen`. It should be located at `~/.ssh/id_rsa.pub` (or a similar name with `.pub`). You might want to copy the private key to your VPS using `scp` to connect to OCI from both your local machine and the VPS.
 -   Finally, provide an email address for installing a certificate manager. This will be your `certmanager_email_address` variable. I skipped this step as it's a personal testing project.
 
-After cloning this repository, navigate to `oci/terraform.tfvars` and edit the values with those from your notes file. This build uses the Terraform configuration from [garutilorenzo's repository](https://github.com/garutilorenzo/k3s-oci-cluster) (check for updates since 2023-05-12 if you encounter errors). You can customize your configuration by editing `main.tf` as explained [here](https://github.com/garutilorenzo/k3s-oci-cluster#pre-flight-checklist). Compared to garutilorenzo's setup, this tutorial uses 1 server node and 3 worker nodes, sets Traefik as the default ingress controller, and doesn't include Longhorn and Argo CD by default (they'll be installed later).
+After cloning this repository, navigate to `oci/terraform.tfvars` and edit the values with those from your notes file. This build uses the great Terraform configuration from [garutilorenzo's repository](https://github.com/garutilorenzo/k3s-oci-cluster) (check for updates since 2024-Jan if you encounter errors). You can customize your configuration by editing `main.tf` as explained [here](https://github.com/garutilorenzo/k3s-oci-cluster#pre-flight-checklist).
 
 *Note: If you experience clock synchronization issues with WSL2, verify the time with the `date` command. If it's out of sync, run `sudo hwclock -s` or `sudo ntpdate time.windows.com`.*
 
-Run `terraform plan` and then `terraform apply`. If successful, your resources will be created in OCI.
+Run `tofu plan` and then `tofu apply`. If successful, your resources will be created in OCI.
 
 When the script finishes, save the outputs (or find them in the OCI console):
 
