@@ -1,8 +1,6 @@
-Okay, I've made corrections for grammar, punctuation, and clarity, while preserving the Markdown formatting. Here's the improved version:
-
 # Kubernetes Cluster with OCI Free-Tier and Raspberry Pi 4
 
-This is a comprehensive tutorial for deploying a Kubernetes cluster (using k3s) with four Oracle Cloud Infrastructure (OCI) free-tier ARM instances and four Raspberry Pi 4s (or however many you have). Additionally, it covers the installation of essential applications like Terraform and Ansible, along with a suite of tools for managing the cluster, including Lens, MetalLB, Helm, Arkade, Longhorn, Portainer, Argo CD, Prometheus, and Grafana.
+This is a comprehensive tutorial for deploying a Kubernetes cluster (using k3s) with four Oracle Cloud Infrastructure (OCI) free-tier ARM instances and four Raspberry Pi 4s (or however many you have). Additionally, it covers the installation of essential applications like OpenTofu (replacement of Terraform) and Ansible, along with a suite of tools for managing the cluster, including Lens, MetalLB, Helm, Arkade, Longhorn, Portainer, Argo CD, Prometheus, and Grafana.
 
 I've created a series of articles on [dev.to](https://dev.to/liviux/k8s-cluster-with-oci-free-tier-and-raspberry-pi4-part-1-28k0) based on this repository, but this document will always contain the most up-to-date version.
 
@@ -40,9 +38,9 @@ This section covers the Oracle Cloud Infrastructure (OCI) portion of the cluster
 
 ## Requirements
 
--   An OCI account, which you can obtain from [oracle.com/cloud](https://www.oracle.com/cloud/). If you have an existing account, ensure you don't have any resources provisioned (even for other users or compartments), as this tutorial will utilize all the free-tier resources. Be cautious when selecting a region, as popular regions might not have sufficient resources. Choose a region with enough available ARM instances. If Terraform gets stuck during the final steps, check **OCI > Compute > Instance Pools** > select your instance pool > **Work requests**. If you see a "Failure" status, examine the log file. An "Out of host capacity" error means you'll need to wait, potentially for days, until resources are freed. You can use a script from [here](https://github.com/hitrov/oci-arm-host-capacity) to attempt instance creation until resources become available. Once successful, quickly delete the created resources in your OCI console and then run the Terraform scripts.
+-   An OCI account, which you can obtain from [oracle.com/cloud](https://www.oracle.com/cloud/). If you have an existing account, ensure you don't have any resources provisioned (even for other users or compartments), as this tutorial will utilize all the free-tier resources. Be cautious when selecting a region, as popular regions might not have sufficient resources. Choose a region with enough available ARM instances (unfortunately I have no idea how to do that). If OpenTofu gets stuck during the final steps, check **OCI > Compute > Instance Pools** > select your instance pool > **Work requests**. If you see a "Failure" status, examine the log file. An "Out of host capacity" error means you'll need to wait, potentially for days, until resources are freed. You can use a script from [here](https://github.com/hitrov/oci-arm-host-capacity) to attempt instance creation until resources become available. Once successful, quickly delete the created resources in your OCI console and then run the Terraform scripts. Another way to do it is by switching to Pay-as-you-Go model, but if you are not careful you can incur costs. This tutorial should use only Always-Free resources.
 -   I used Windows 11 with WSL2 running Ubuntu 20.04, but any Linux machine should work.
--   Terraform installed (tested with v1.4.6 and OCI provider v4.120.0). Instructions can be found [here](https://developer.hashicorp.com/terraform/tutorials/aws-get-started/install-cli).
+-   OpenTofu installed (tested with v1.10.4 and OCI provider v6.21.0). Instructions can be found [here](https://opentofu.org/docs/intro/install/).
 
 ## Preparing
 
@@ -96,7 +94,7 @@ Add the following to your notes file:
 -   **Region**: The region name is in the top-right corner. Find it [here](https://docs.oracle.com/en-us/iaas/Content/General/Concepts/regions.htm) and copy its identifier (e.g., eu-paris-1).
 -   **Private key path**: In this case, `~/.oci/key.pem`
 
-Now, create a new folder to test if Terraform is correctly linked with OCI. Inside that folder, create a file named `main.tf` and add the following content:
+Now, create a new folder to test if OpenTofu is correctly linked with OCI. Inside that folder, create a file named `main.tf` and add the following content:
 
 ```
 terraform {
@@ -129,15 +127,15 @@ output "all-availability-domains-in-your-compartment" {
 }
 ```
 
-Run `terraform init` to download the OCI provider, `terraform plan` to preview the changes, and `terraform apply` to execute. This configuration should return the names of the availability domains in your region. If you see something like `"name" = "pmkj:EU-YOURREGION-1-AD-1"` without errors, your setup is correct so far. You can delete this test file now.
+Run `tofu init` to download the OCI provider, `tofu plan` to preview the changes, and `tofu apply` to execute. This configuration should return the names of the availability domains in your region. If you see something like `"name" = "pmkj:EU-YOURREGION-1-AD-1"` without errors, your setup is correct so far. You can delete this test file now.
 
 ## Provisioning
 
 You'll need to add a few more values to your notes file:
 
--   In the OCI console, click **Developer Tools > Cloud Shell** (top-right corner) and run `oci iam availability-domain list`. Save the name of the availability domain (not the ID). This is your `availability_domain` variable.
--   In the same Cloud Shell, run `oci compute image list --compartment-id <YOUR-COMPARTMENT> --operating-system "Canonical Ubuntu" --operating-system-version "22.04 Minimal aarch64" --shape "VM.Standard.A1.Flex"` to find the OS Image ID. The first result is likely the latest build (e.g., `Canonical-Ubuntu-22.04-Minimal-aarch64-2022.11.05-0`). Save the ID. This is your `os_image_id` variable.
--   Search for "my IP" on Google to find your public IP address. Save it in CIDR format (e.g., `111.222.111.99/32`). This is your `my_public_ip_cidr` variable. If you don't have a static IPv4 address from your ISP, consider using a cheap VPS with a static IP or setting up DDNS. However, DDNS might not be usable in Security Lists. Alternatively, you'll need to manually update the Ingress rule in your VCN's Security List with your new IP each time it changes, or set the Ingress rule to `0.0.0.0/0` to allow all traffic (not recommended for security reasons).
+-   In the OCI console, click **Developer Tools > Cloud Shell** (top-right corner) and run `oci iam availability-domain list`. Save the name of the availability domain (not the ID) - if many pick one. This is your `availability_domain` variable. Should be the same results as from running the test above.
+-   In the same Cloud Shell, run `oci compute image list --compartment-id <YOUR-COMPARTMENT> --operating-system "Canonical Ubuntu" --operating-system-version "24.04 Minimal aarch64" --shape "VM.Standard.A1.Flex"` to find the OS Image ID. The first result is likely the latest build (e.g., `Canonical-Ubuntu-24.04-Minimal-aarch64-2024.10.08-0`). Save the ID. This is your `os_image_id` variable.
+-   Search for "my IP" on Google to find your public IP address. Save it in CIDR format (e.g., `111.222.111.99/32`). This is your `my_public_ip_cidr` variable. If you don't have a static IPv4 address from your ISP, consider using a cheap VPS with a static IP (highly recommended) or setting up DDNS. However, DDNS might not be usable in Security Lists. Alternatively, you'll need to manually update the Ingress rule in your VCN's Security List with your new IP each time it changes, or set the Ingress rule to `0.0.0.0/0` to allow all traffic (absolutely not recommended for security reasons).
 -   Your `public_key_path` is the path to your public SSH key. If you don't have one, generate it with `ssh-keygen`. It should be located at `~/.ssh/id_rsa.pub` (or a similar name with `.pub`). You might want to copy the private key to your VPS using `scp` to connect to OCI from both your local machine and the VPS.
 -   Finally, provide an email address for installing a certificate manager. This will be your `certmanager_email_address` variable. I skipped this step as it's a personal testing project.
 
@@ -176,7 +174,7 @@ public_lb_ip = tolist([
 
 You can now connect to any worker or server using `ssh -i ~/.ssh/your_private_key ubuntu@<server_or_worker_ip>`. Connect to the server and run `sudo kubectl get nodes` to check the nodes.
 
-If your cluster encounters issues, you can delete the resources in your compartment (go to **Governance & Administration > Tenancy Management > Tenancy Explorer**) one by one (or try `terraform destroy`, but it might not always work). Deleting the VCN can be particularly challenging. Afterward, rerun `terraform apply` (if resources are available).
+If your cluster encounters issues, you can delete the resources in your compartment (go to **Governance & Administration > Tenancy Management > Tenancy Explorer**) one by one (or try `terraform destroy`, but it might not always work). Deleting the VCN can be particularly challenging. Afterward, rerun `terraform apply` (if resources are available). We don't focus too much on Terraform best practices (like storing state, environment variables, or many more other configurations) as these resources will be provisioned and forgotten, slim chances OCI will give more compute resources in the future (hoping they will not remove some of them).
 
 # 2. Raspberry Pi 4
 
