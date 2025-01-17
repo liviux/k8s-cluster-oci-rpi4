@@ -60,8 +60,8 @@ variable "certmanager_email_address" {
 }
 
 variable "k3s_server_pool_size" {
-  default = 1
+  default = 3
 }
 variable "k3s_worker_pool_size" {
-  default = 2
+  default = 0
 }
