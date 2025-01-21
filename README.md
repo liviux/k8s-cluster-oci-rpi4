@@ -137,9 +137,9 @@ You'll need to add a few more values to your notes file:
 -   In the same Cloud Shell, run `oci compute image list --compartment-id <YOUR-COMPARTMENT> --operating-system "Canonical Ubuntu" --operating-system-version "24.04 Minimal aarch64" --shape "VM.Standard.A1.Flex"` to find the OS Image ID. The first result is likely the latest build (e.g., `Canonical-Ubuntu-24.04-Minimal-aarch64-2024.10.08-0`). Save the ID. This is your `os_image_id` variable.
 -   Search for "my IP" on Google to find your public IP address. Save it in CIDR format (e.g., `111.222.111.99/32`). This is your `my_public_ip_cidr` variable. If you don't have a static IPv4 address from your ISP, consider using a cheap VPS with a static IP (highly recommended) or setting up DDNS. However, DDNS might not be usable in Security Lists. Alternatively, you'll need to manually update the Ingress rule in your VCN's Security List with your new IP each time it changes, or set the Ingress rule to `0.0.0.0/0` to allow all traffic (absolutely not recommended for security reasons).
 -   Your `public_key_path` is the path to your public SSH key. If you don't have one, generate it with `ssh-keygen`. It should be located at `~/.ssh/id_rsa.pub` (or a similar name with `.pub`). You might want to copy the private key to your VPS using `scp` to connect to OCI from both your local machine and the VPS.
--   Finally, provide an email address for installing a certificate manager. This will be your `certmanager_email_address` variable. I skipped this step as it's a personal testing project.
+-   Finally, provide an email address for installing a certificate manager. This will be your `certmanager_email_address` variable.
 
-After cloning this repository, navigate to `oci/terraform.tfvars` and edit the values with those from your notes file. This build uses the great Terraform configuration from [garutilorenzo's repository](https://github.com/garutilorenzo/k3s-oci-cluster) (check for updates since 2024-Jan if you encounter errors). You can customize your configuration by editing `main.tf` as explained [here](https://github.com/garutilorenzo/k3s-oci-cluster#pre-flight-checklist).
+After cloning this repository, navigate to `oci/terraform.tfvars` and edit the values with those from your notes file. This build uses the great Terraform configuration from [garutilorenzo's repository](https://github.com/garutilorenzo/k3s-oci-cluster) (check for updates since 2024-Jan if you encounter errors). You can customize your configuration by editing `main.tf` as explained [here](https://github.com/garutilorenzo/k3s-oci-cluster#pre-flight-checklist). Other options that I edited (to use latest versions and other config) are `k3s_server_pool_size = 1`,  `k3s_worker_pool_size = 2`, `longhorn_release = v1.7.2`,   `nginx_ingress_release = v1.12.0`, `certmanager_release = v1.16.3`, `argocd_release = v2.13.3`, `argocd_image_updater_release = v0.15.2`.
 
 *Note: If you experience clock synchronization issues with WSL2, verify the time with the `date` command. If it's out of sync, run `sudo hwclock -s` or `sudo ntpdate time.windows.com`.*
 
@@ -174,7 +174,7 @@ public_lb_ip = tolist([
 
 You can now connect to any worker or server using `ssh -i ~/.ssh/your_private_key ubuntu@<server_or_worker_ip>`. Connect to the server and run `sudo kubectl get nodes` to check the nodes.
 
-If your cluster encounters issues, you can delete the resources in your compartment (go to **Governance & Administration > Tenancy Management > Tenancy Explorer**) one by one (or try `terraform destroy`, but it might not always work). Deleting the VCN can be particularly challenging. Afterward, rerun `terraform apply` (if resources are available). We don't focus too much on Terraform best practices (like storing state, environment variables, or many more other configurations) as these resources will be provisioned and forgotten, slim chances OCI will give more compute resources in the future (hoping they will not remove some of them).
+If your cluster encounters issues, you can delete the resources in your compartment (go to **Governance & Administration > Tenancy Management > Tenancy Explorer**) one by one (or try `tofu destroy`, but it might not always work). Deleting the VCN can be particularly challenging. Afterward, rerun `tofu apply` (if resources are available). We don't focus too much on OpenTofu/Terraform best practices (like storing state, environment variables, or many more other configurations) as these resources will be provisioned and forgotten, there are slim chances OCI will give more compute resources in the future (hoping they will not remove some of them).
 
 # 2. Raspberry Pi 4
 
@@ -189,7 +189,7 @@ This section focuses on the Raspberry Pi 4 (RPi4) component of the cluster.
 
 ## Preparing
 
-Installing an OS on a Raspberry Pi is straightforward. Insert the SD card into your PC and use the Raspberry Pi Imager from the [official website](https://www.raspberrypi.com/software/). I chose the same OS as the OCI cluster: Ubuntu Server 22.04.1 64-bit. In the Imager's advanced settings (bottom-right), select **Set Hostname** and choose a name for each Pi (e.g., rpi4-1, rpi4-2, rpi4-3, rpi4-4). Select **Enable SSH** and **Set username and password** to enable immediate SSH access without a monitor and keyboard. Click **Write** and repeat for each Raspberry Pi.
+Installing an OS on a Raspberry Pi is straightforward. Insert the SD card into your PC and use the Raspberry Pi Imager from the [official website](https://www.raspberrypi.com/software/). I chose the same OS as the OCI cluster: Ubuntu Server 24.04 64-bit. In the Imager's advanced settings (bottom-right), select **Set Hostname** and choose a name for each Pi (e.g., rpi4-1, rpi4-2, rpi4-3, rpi4-4). Select **Enable SSH** and **Set username and password** to enable immediate SSH access without a monitor and keyboard. Click **Write** and repeat for each Raspberry Pi.
 
 Find the IP addresses of your Raspberry Pis from your home router's interface. You can also configure **Address Reservation** there to ensure they retain the same IPs. If you want to access them from outside your network and don't have a static IPv4 address, consider setting up port forwarding and using a DDNS service from your ISP. These settings are typically configured in your router's interface, so search online for instructions if needed.
 
@@ -497,6 +497,12 @@ For the agent nodes, create an Ansible playbook named `workers_link.yml`:
 Replace `MYTOKEN` with the content of `/var/lib/rancher/k3s/server/node-token` on the server and adjust the server's IP address if necessary. Run it with `ansible-playbook ~/ansible/link/workers_link.yml -K -b`.
 
 You're done! Go back to the server node and run `sudo kubectl get nodes -owide`. You should see eight nodes: one master and seven workers.
+I've added some labels to nodes (e.g., add them with `sudo kubectl label node <server-node-name> region=eu-frankfurt-1`). This are my options: 
+|Node Type   |Suggested Labels   |
+|---|---|
+|OCI ARM Nodes   |region=eu-frankfurt-1, cloud=oci, arch=arm64, storage=block-volume, performance=high, ram=6gb, hardware-type=oci-arm, node-role=server (for the k3s server),   |
+|Raspberry Pi (8GB)   |region=ro-bucharest, edge=true, arch=arm64, storage=hdd, performance=medium, ram=8gb, hardware-type=raspberry-pi-4    |
+|Raspberry Pi (4GB)   |region=ro-bucharest, edge=true, arch=arm64, storage=sdcard, performance=low, ram=4gb, hardware-type=raspberry-pi-4    |
 
 # 4. Other Apps
 
