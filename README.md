@@ -143,7 +143,7 @@ After cloning this repository, navigate to `oci/terraform.tfvars` and edit the v
 
 *Note: If you experience clock synchronization issues with WSL2, verify the time with the `date` command. If it's out of sync, run `sudo hwclock -s` or `sudo ntpdate time.windows.com`.*
 
-Run `tofu plan` and then `tofu apply`. If successful, your resources will be created in OCI.
+Run `tofu plan` and then `tofu apply` (took 6 minutes). If successful, your resources will be created in OCI.
 
 When the script finishes, save the outputs (or find them in the OCI console):
 
