@@ -490,7 +490,7 @@ For the agent nodes, create an Ansible playbook named `workers_link.yml`:
 - hosts: workers
   tasks:
   - name: Install k3s on workers and link to server node
-    shell: curl -sfL https://get.k3s.io | K3S_URL=https://10.20.30.1:6443 K3S_TOKEN=MYTOKEN INSTALL_K3S_EXEC="--flannel-iface=nm-netmaker" INSTALL_K3S_CHANNEL=latest sh -s -
+    shell: curl -sfL https://get.k3s.io | K3S_URL=https://10.20.30.1:6443 K3S_TOKEN=MYTOKEN INSTALL_K3S_EXEC="--flannel-iface=nm-netmaker" INSTALL_K3S_CHANNEL=latest sh -v
 ...
 ```
 
@@ -768,5 +768,3 @@ For the Grafana dashboard, go to `http://<any_node_ip>/kube-prometheus-stack-gra
 -   A great, comprehensive guide for running Kubernetes on Raspberry Pi: [https://rpi4cluster.com/](https://rpi4cluster.com/)
 -   For each application installed, refer to its official documentation.
 -   ChatGPT was a great help; use it here: [https://chat.openai.com/chat](https://chat.openai.com/chat)
-
-That concludes the improved and completed README. Let me know if you have any other questions.
