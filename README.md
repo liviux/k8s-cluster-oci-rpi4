@@ -32,13 +32,39 @@ I've created a series of articles on [dev.to](https://dev.to/liviux/k8s-cluster-
       - [Prometheus & Grafana](#prometheus--grafana)
 - [References](#references)
 
+# 0. Preparation
+
+Some things need to be resolved first, before starting provisioning.
+-   If you do not know your public IPv4 address, search for "my IP" on Google to find your public IP address. Save it in CIDR format (e.g., `111.222.111.99/32`). This is your `my_public_ip_cidr` variable that you will need in the OCI step. If you don't have a static IPv4 address from your ISP, consider using a cheap VPS with a static IP (highly recommended) or setting up DDNS. However, DDNS might not be usable in Security Lists. Alternatively, you'll need to manually update the Ingress rule in your VCN's Security List with your new IP each time it changes, or set the Ingress rule to `0.0.0.0/0` to allow all traffic (absolutely not recommended for security reasons).
+-   It is not mandatory but you must generate and save a new public/private key pair. I used PuTTYgen because I wanted to use PuTTY and Pagent. Or you can use openssl.
+
+Create a new folder in your home directory:
+
+`mkdir ~/.oci`
+
+Generate a private key:
+
+`openssl genrsa -out ~/.oci/key.pem 2048`
+
+Change the key's permissions:
+
+`chmod 600 ~/.oci/key.pem`
+
+Generate the corresponding public key:
+
+`openssl rsa -pubout -in ~/.oci/key.pem -out ~/.oci/key_public.pem`
+
+-    Set up [Netmaker](https://github.com/gravitl/netmaker)
+
+
+
 # 1. OCI
 
 This section covers the Oracle Cloud Infrastructure (OCI) portion of the cluster setup.
 
 ## Requirements
 
--   An OCI account, which you can obtain from [oracle.com/cloud](https://www.oracle.com/cloud/). If you have an existing account, ensure you don't have any resources provisioned (even for other users or compartments), as this tutorial will utilize all the free-tier resources. Be cautious when selecting a region, as popular regions might not have sufficient resources. Choose a region with enough available ARM instances (unfortunately I have no idea how to do that). If OpenTofu gets stuck during the final steps, check **OCI > Compute > Instance Pools** > select your instance pool > **Work requests**. If you see a "Failure" status, examine the log file. An "Out of host capacity" error means you'll need to wait, potentially for days, until resources are freed. You can use a script from [here](https://github.com/hitrov/oci-arm-host-capacity) to attempt instance creation until resources become available. Once successful, quickly delete the created resources in your OCI console and then run the Terraform scripts. Another way to do it is by switching to Pay-as-you-Go model, but if you are not careful you can incur costs. This tutorial should use only Always-Free resources.
+-   An OCI account, which you can obtain from [oracle.com/cloud](https://www.oracle.com/cloud/). If you have an existing account, ensure you don't have any resources provisioned (even for other users or compartments), as this tutorial will utilize all the free-tier resources. Be cautious when selecting a region, as popular regions might not have sufficient resources. Choose a region with enough available ARM instances (unfortunately I have no idea how to do that). If OpenTofu gets stuck during the final steps, check **OCI > Compute > Instance Pools** > select your instance pool > **Work requests**. If you see a "Failure" status, examine the log file. An "Out of host capacity" error means you'll need to wait, potentially for days, until resources are freed. You can use a script from [here](https://github.com/hitrov/oci-arm-host-capacity) to attempt instance creation until resources become available. Once successful, quickly delete the created resources in your OCI console and then run the Terraform scripts. Another (recommended) way to do it is switching to the Pay-as-you-Go model, but if you are not careful you can incur costs. This tutorial should use **only** your Always-Free resources.
 -   I used Windows 11 with WSL2 running Ubuntu 20.04, but any Linux machine should work.
 -   OpenTofu installed (tested with v1.10.4 and OCI provider v6.21.0). Instructions can be found [here](https://opentofu.org/docs/intro/install/).
 
@@ -64,23 +90,9 @@ allow group <<group_you_created>> to manage policies in compartment <compartment
 allow group <<group_you_created>> to manage dynamic-groups in tenancy
 ```
 
-Next, you'll need to access OCI from your machine. Create a new folder in your home directory:
+Next, you'll need to access OCI from your machine. 
 
-`mkdir ~/.oci`
-
-Generate a private key:
-
-`openssl genrsa -out ~/.oci/key.pem 2048`
-
-Change the key's permissions:
-
-`chmod 600 ~/.oci/key.pem`
-
-Generate the corresponding public key:
-
-`openssl rsa -pubout -in ~/.oci/key.pem -out ~/.oci/key_public.pem`
-
-Copy the contents of the public key:
+Copy the contents of the public key you created:
 
 `cat ~/.oci/key_public.pem`
 
@@ -135,7 +147,6 @@ You'll need to add a few more values to your notes file:
 
 -   In the OCI console, click **Developer Tools > Cloud Shell** (top-right corner) and run `oci iam availability-domain list`. Save the name of the availability domain (not the ID) - if many pick one. This is your `availability_domain` variable. Should be the same results as from running the test above.
 -   In the same Cloud Shell, run `oci compute image list --compartment-id <YOUR-COMPARTMENT> --operating-system "Canonical Ubuntu" --operating-system-version "24.04 Minimal aarch64" --shape "VM.Standard.A1.Flex"` to find the OS Image ID. The first result is likely the latest build (e.g., `Canonical-Ubuntu-24.04-Minimal-aarch64-2024.10.08-0`). Save the ID. This is your `os_image_id` variable.
--   Search for "my IP" on Google to find your public IP address. Save it in CIDR format (e.g., `111.222.111.99/32`). This is your `my_public_ip_cidr` variable. If you don't have a static IPv4 address from your ISP, consider using a cheap VPS with a static IP (highly recommended) or setting up DDNS. However, DDNS might not be usable in Security Lists. Alternatively, you'll need to manually update the Ingress rule in your VCN's Security List with your new IP each time it changes, or set the Ingress rule to `0.0.0.0/0` to allow all traffic (absolutely not recommended for security reasons).
 -   Your `public_key_path` is the path to your public SSH key. If you don't have one, generate it with `ssh-keygen`. It should be located at `~/.ssh/id_rsa.pub` (or a similar name with `.pub`). You might want to copy the private key to your VPS using `scp` to connect to OCI from both your local machine and the VPS (using `scp -P SSHPORTIFNEEDED ~/.ssh/id_rsa root@DESTINATIONIP:~/.ssh/`).
 -   Finally, provide an email address for installing a certificate manager. This will be your `certmanager_email_address` variable.
 
