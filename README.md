@@ -1,6 +1,6 @@
 # Kubernetes Cluster with OCI Free-Tier and Raspberry Pi 4
 
-This is a comprehensive tutorial for deploying a Kubernetes cluster (using k3s) with four Oracle Cloud Infrastructure (OCI) free-tier ARM instances and four Raspberry Pi 4s (or however many you have). Additionally, it covers the installation of essential applications like OpenTofu (replacement of Terraform) and Ansible, along with a suite of tools for managing the cluster, including Lens, MetalLB, Helm, Arkade, Longhorn, Portainer, Argo CD, Prometheus, and Grafana.
+This is a comprehensive tutorial for deploying a hybrid Kubernetes cluster (using k3s) with four Oracle Cloud Infrastructure (OCI) free-tier ARM instances and four Raspberry Pi 4s (or however many you have). Additionally, it covers the installation of essential applications like OpenTofu (replacement of Terraform) and Ansible, along with a suite of tools for managing the cluster, including Lens, MetalLB, Helm, Arkade, Longhorn, Portainer, Argo CD, Prometheus, and Grafana.
 
 I've created a series of articles on [dev.to](https://dev.to/liviux/k8s-cluster-with-oci-free-tier-and-raspberry-pi4-part-1-28k0) based on this repository, but this document will always contain the most up-to-date version.
 
@@ -8,6 +8,7 @@ I've created a series of articles on [dev.to](https://dev.to/liviux/k8s-cluster-
 
 - [Kubernetes Cluster with OCI Free-Tier and Raspberry Pi 4](#kubernetes-cluster-with-oci-free-tier-and-raspberry-pi-4)
 - [Table of Contents](#table-of-contents)
+    - [Preparation](#0-preparation)
     - [OCI](#1-oci)
       - [Requirements](#requirements)
       - [Preparing](#preparing)
@@ -34,9 +35,9 @@ I've created a series of articles on [dev.to](https://dev.to/liviux/k8s-cluster-
 
 # 0. Preparation
 
-Some things need to be resolved first, before starting provisioning.
--   If you do not know your public IPv4 address, search for "my IP" on Google to find your public IP address. Save it in CIDR format (e.g., `111.222.111.99/32`). This is your `my_public_ip_cidr` variable that you will need in the OCI step. If you don't have a static IPv4 address from your ISP, consider using a cheap VPS with a static IP (highly recommended) or setting up DDNS. However, DDNS might not be usable in Security Lists. Alternatively, you'll need to manually update the Ingress rule in your VCN's Security List with your new IP each time it changes, or set the Ingress rule to `0.0.0.0/0` to allow all traffic (absolutely not recommended for security reasons).
--   It is not mandatory but you must generate and save a new public/private key pair. I used PuTTYgen because I wanted to use PuTTY and Pagent. Or you can use openssl.
+Before we start setting things up, there are a few things we need to take care of:
+-   If you do not know your public IPv4 address, search for "my IP" on Google to find your public IP address. Save it in CIDR format (e.g., `111.222.111.99/32`). This is your `my_public_ip_cidr` variable that you will need in the OCI step. If you don't have a static IPv4 address from your ISP, consider using a cheap VPS with a static IP (highly recommended) or setting up DDNS. However, DDNS might not be usable in Security Lists on OCI. Alternatively, you'll need to manually update the Ingress rule in your OCI VCN's Security List with your new IP each time it changes, or set the Ingress rule to `0.0.0.0/0` to allow all traffic (absolutely not recommended for security reasons).
+-   It is not mandatory but you must generate and save a new public/private key pair. I used PuTTYgen because I wanted to use PuTTY and Pagent. Or you can use openssl:
 
 Create a new folder in your home directory:
 
@@ -56,7 +57,13 @@ Generate the corresponding public key:
 
 -    Set up [Netmaker](https://github.com/gravitl/netmaker)
 
+ We will create a VPN between all of the nodes (and, if you want, your local machine and VPS) using WireGuard, because the RPi4s and OCI instances are on different networks.  While WireGuard is not the hardest application to install and configure, there's a wonderful application that does almost everything automatically: Netmaker.  On your VPS or local machine (if it has a static IP), run:
 
+`sudo wget -qO /root/nm-quick.sh https://raw.githubusercontent.com/gravitl/netmaker/master/scripts/nm-quick.sh && sudo chmod +x /root/nm-quick.sh && sudo /root/nm-quick.sh`
+
+Follow the prompts and select an automatic domain (if you don't have your own). After installation, you'll have a dashboard at an auto-generated domain. Open the link you received and create a user and password.
+
+A default network should have been created for you. Go to the **Dashboard > Network** tab and click **Create Network** if you want to create a new one with a different CIDR. You can adjust settings if needed. I changed the CIDR to `10.20.30.0/24`. Go to the **Access Keys** tab, select your network, and you'll find the keys to connect your machines.  Alternatively, go directly to your network, then **Nodes**, then **Add New Nodes**, and follow the instructions there to add your PC or other new nodes for now.
 
 # 1. OCI
 
