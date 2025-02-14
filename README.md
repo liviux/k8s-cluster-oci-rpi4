@@ -22,6 +22,7 @@ I've created a series of articles on [dev.to](https://dev.to/liviux/k8s-cluster-
       - [Netmaker](#netmaker)
       - [Cluster](#cluster)
     - [Other Apps](#4-other-apps)
+      - [ETCD](#etcd)
       - [Lens](#lens)
       - [MetalLB](#metallb)
       - [Helm & Arkade](#helm--arkade)
@@ -525,6 +526,17 @@ I've added some labels to nodes (e.g., add them with `sudo kubectl label node <s
 # 4. Other Apps
 
 I'll briefly cover the installation of these applications and how to access them. You'll need to configure them further and run demo applications to learn how to use them effectively.
+
+## ETCD
+
+ETCD is the key-value store DB deployed on k3s that has a [HA architecture with Embedded DB](https://docs.k3s.io/architecture#high-availability-k3s).
+To intearact with ETCD, *etcd-client* must be installed (it should be already if you followed the steps until now). 
+
+For example to see all the members run this command: `sudo ETCDCTL_API=3 etcdctl member list --cacert=/var/lib/rancher/k3s/server/tls/etcd/server-ca.crt --cert=/var/lib/rancher/k3s/server/tls/etcd/server-client.crt --key=/var/lib/rancher/k3s/server/tls/etcd/server-client.key
+`
+
+Or to see endpoints status: `sudo ETCDCTL_API=3 etcdctl --endpoints=https://10.0.0.192:2379,https://10.0.0.244:2379,https://10.0.0.19:2379 endpoint status --write-out=table --cacert=/var/lib/rancher/k3s/server/tls/etcd/server-ca.crt --cert=/var/lib/rancher/k3s/server/tls/etcd/server-client.crt --key=/var/lib/rancher/k3s/server/tls/etcd/server-client.key
+` where you have to set your servers IPs.
 
 ## Lens
 
