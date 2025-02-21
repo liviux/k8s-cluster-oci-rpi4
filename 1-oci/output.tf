@@ -27,5 +27,4 @@ output "k3s_extra_server_ip" {
 output "cluster_endpoint" {
   description = "The endpoint for your K3s cluster"
   value       = "https://${local.public_lb_ip[0]}:${var.kube_api_port}"
-  sensitive   = true
 }
