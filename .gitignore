@@ -43,5 +43,5 @@ terraform.rc
 /.vscode/
 /.codegpt/
 
-/oci/INFRA.txt
-/oci/old_README.md
+/1-oci/INFRA.txt
+/1-oci/old_README.md
