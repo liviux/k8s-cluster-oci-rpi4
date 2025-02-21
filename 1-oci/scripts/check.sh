@@ -174,19 +174,20 @@ check_argocd() {
     wait ${pf_pid} 2>/dev/null || true
     sleep 1
 
-    # Check ArgoCD applications status
-    echo "Checking ArgoCD Applications status..."
-    argocd app list --output name --namespace "$ARGOCD_NAMESPACE" | while read app_name; do
-        sync_status=$(argocd app get "$app_name" --namespace "$ARGOCD_NAMESPACE" --output json | jq -r '.status.sync.status')
-        health_status=$(argocd app get "$app_name" --namespace "$ARGOCD_NAMESPACE" --output json | jq -r '.status.health.status')
+# Check ArgoCD applications status using kubectl for Application CRDs
+echo "Checking ArgoCD Applications status..."
+kubectl get applications.argoproj.io -n "$ARGOCD_NAMESPACE" -o json | jq -c '.items[]' | while read -r app; do
+    app_name=$(echo "$app" | jq -r '.metadata.name')
+    sync_status=$(echo "$app" | jq -r '.status.sync.status')
+    health_status=$(echo "$app" | jq -r '.status.health.status')
 
-        if [[ "$sync_status" != "Synced" || "$health_status" != "Healthy" ]]; then
-            echo -e "${RED}→ ArgoCD Application '$app_name' is not healthy (Sync: $sync_status, Health: $health_status)${NC}"
-            status=1
-        else
-            echo -e "${GREEN}→ ArgoCD Application '$app_name' is healthy (Sync: $sync_status, Health: $health_status)${NC}"
-        fi
-    done
+    if [[ "$sync_status" != "Synced" || "$health_status" != "Healthy" ]]; then
+        echo -e "${RED}→ ArgoCD Application '$app_name' is not healthy (Sync: $sync_status, Health: $health_status)${NC}"
+        status=1
+    else
+        echo -e "${GREEN}→ ArgoCD Application '$app_name' is healthy (Sync: $sync_status, Health: $health_status)${NC}"
+    fi
+done
 
     print_status $status "Argo CD health check"
     return $status
@@ -540,7 +541,18 @@ integration_test() {
     echo "Creating test namespace..."
     kubectl create namespace "$TEST_NS" >/dev/null 2>&1 || true
 
-    # Create test resources
+    # Create a self-signed ClusterIssuer for the integration test
+    echo "Creating self-signed ClusterIssuer for testing..."
+    kubectl apply -f - <<'EOF'
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: selfsigned-issuer
+spec:
+  selfSigned: {}
+EOF
+
+    # Create test resources with the certificate now referencing the self-signed issuer
     cat <<EOF | kubectl apply -f - >/dev/null 2>&1
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -570,7 +582,7 @@ spec:
   dnsNames:
     - test-app.local
   issuerRef:
-    name: selfsigned-cluster-issuer
+    name: selfsigned-issuer
     kind: ClusterIssuer
 ---
 apiVersion: apps/v1
