@@ -231,7 +231,7 @@ variable "unique_tag_key" {
 
 variable "unique_tag_value" {
   type    = string
-  default = "https://github.com/garutilorenzo/k3s-oci-cluster"
+  default = "https://github.com/liviux/k8s-cluster-oci-rpi4"
 }
 
 # IAM Configuration
