@@ -19,11 +19,12 @@ resource "oci_identity_policy" "compute_dynamic_group_policy" {
   description    = "Policy to allow dynamic group ${oci_identity_dynamic_group.compute_dynamic_group.name} to read instance-family and compute-management-family in the compartment"
   name           = var.oci_identity_policy_name
   
-  statements = [<<-EOT
-    allow dynamic-group ${oci_identity_dynamic_group.compute_dynamic_group.name} to read instance-family in compartment id ${var.compartment_ocid}
-    allow dynamic-group ${oci_identity_dynamic_group.compute_dynamic_group.name} to read compute-management-family in compartment id ${var.compartment_ocid}
-  EOT
+  statements = [
+    "allow dynamic-group ${oci_identity_dynamic_group.compute_dynamic_group.name} to read instance-family in compartment id ${var.compartment_ocid}",
+    "allow dynamic-group ${oci_identity_dynamic_group.compute_dynamic_group.name} to read compute-management-family in compartment id ${var.compartment_ocid}"
   ]
+
+
 
   freeform_tags = local.common_tags
 }
