@@ -158,8 +158,42 @@ You'll need to add a few more values to your notes file:
 -   Your `public_key_path` is the path to your public SSH key. If you don't have one, generate it with `ssh-keygen`. It should be located at `~/.ssh/id_rsa.pub` (or a similar name with `.pub`). You might want to copy the private key to your VPS using `scp` to connect to OCI from both your local machine and the VPS (using `scp -P SSHPORTIFNEEDED ~/.ssh/id_rsa root@DESTINATIONIP:~/.ssh/`).
 -   Finally, provide an email address for installing a certificate manager. This will be your `certmanager_email_address` variable.
 
-After cloning this repository, navigate to `oci/terraform.tfvars` and edit the values with those from your notes file. This build uses the great Terraform configuration from [garutilorenzo's repository](https://github.com/garutilorenzo/k3s-oci-cluster) (check for updates since 2024-Jan if you encounter errors). You can customize your configuration by editing `main.tf` as explained [here](https://github.com/garutilorenzo/k3s-oci-cluster#pre-flight-checklist). Other options that I edited (to use latest versions and other config) are `k3s_server_pool_size = 1`,  `k3s_worker_pool_size = 2`, `longhorn_release = v1.7.2`,   `nginx_ingress_release = v1.12.0`, `certmanager_release = v1.16.3`, `argocd_release = v2.13.3`, `argocd_image_updater_release = v0.15.2`.
+After cloning this repository, navigate to `1-oci`, create the `terraform.tfvars` file with the values from your notes file. This build uses the great Terraform configuration from [garutilorenzo's repository](https://github.com/garutilorenzo/k3s-oci-cluster) (check for updates since 2024-Jan if you encounter errors). You can customize your configuration by editing `main.tf` as explained [here](https://github.com/garutilorenzo/k3s-oci-cluster#pre-flight-checklist). Other options that I edited (to use latest versions and other config) are `k3s_server_pool_size = 1`,  `k3s_worker_pool_size = 2`, `longhorn_release = v1.7.2`,   `nginx_ingress_release = v1.12.0`, `certmanager_release = v1.16.3`, `argocd_release = v2.13.3`, `argocd_image_updater_release = v0.15.2`.
+This is how my `terraform.tfvars` file looks like:
 
+```
+# OCI Provider Configuration
+tenancy_ocid     = "ocid1.tenancy.oc1..ABC"
+compartment_ocid = "ocid1.compartment.oc1..ASD"
+user_ocid        = "ocid1.user.oc1..ADDSA"
+region           = "eu-frankfurt-1"
+fingerprint      = "11:22:aa"
+
+# Authentication Keys
+private_key_path = "~/.oci/oci.pem"
+public_key_path  = "~/.ssh/key.pub"
+
+# Infrastructure Configuration
+availability_domain = "FQoU:EU-FRANKFURT-1-AD-3"
+my_public_ip_cidr   = "171.212.12.123/32"
+os_image_id         = "ocid1.image.oc1.eu-frankfurt-1.aaaaaaaax65kresevp22fzwqj3yy553ktmoekrhjmgx3p3p2tvk4hsw3vxmq"
+
+# K3s Cluster Configuration
+cluster_name          = "k3s_cluster"
+environment           = "production"
+k3s_server_pool_size = 2
+k3s_worker_pool_size = 1
+k3s_version          = "v1.32.1+k3s1"
+
+# Kubernetes and Add-ons Versions
+longhorn_release             = "v1.8.0"
+certmanager_release          = "v1.17.1"
+argocd_release               = "7.8.2"
+argocd_image_updater_release = "0.12.0"
+
+# Certificate Manager Configuration
+certmanager_email_address = "mail@gmail.com"
+```
 *Note: If you experience clock synchronization issues with WSL2, verify the time with the `date` command. If it's out of sync, run `sudo hwclock -s` or `sudo ntpdate time.windows.com`.*
 
 Run `tofu plan` and then `tofu apply` (took 6 minutes). If successful, your resources will be created in OCI.
