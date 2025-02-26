@@ -54,22 +54,7 @@ wait_for_api_server() {
     done
 }
 
-setup_k3s_params() {
-    local params=()
-    
-    %{ if k3s_subnet != "default_route_table" }
-    local_ip=$(ip -4 route ls ${k3s_subnet} | grep -Po '(?<=src )(\S+)')
-    flannel_iface=$(ip -4 route ls ${k3s_subnet} | grep -Po '(?<=dev )(\S+)')
-    
-    params+=("--node-ip $local_ip")
-    params+=("--flannel-iface $flannel_iface")
-    %{ endif }
-    
-    echo "$${params[*]}"
-}
-
 install_k3s() {
-    local readonly install_params=$(setup_k3s_params)
     local k3s_version
     
     %{ if k3s_version == "latest" }
@@ -84,7 +69,7 @@ install_k3s() {
         INSTALL_K3S_VERSION=$k3s_version \
         K3S_TOKEN=${k3s_token} \
         K3S_URL=https://${k3s_url}:6443 \
-        sh -s - $install_params); do
+        sh -s - ); do
         log "WARN" "K3s installation failed, retrying..."
         sleep 2
     done

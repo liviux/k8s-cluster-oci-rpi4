@@ -642,7 +642,7 @@ spec:
 EOF
 
     echo "Waiting for resources to be ready..."
-    sleep 5
+    sleep 30
 
     # Check PVC
     if ! kubectl get pvc test-pvc -n "$TEST_NS" | grep -q Bound; then

@@ -57,11 +57,6 @@ variable "k3s_version" {
   default = "latest"
 }
 
-variable "k3s_subnet" {
-  type    = string
-  default = "default_route_table"
-}
-
 variable "k3s_server_pool_size" {
   type        = number
   description = "Number of server nodes in the K3s cluster"
@@ -173,11 +168,6 @@ variable "ingress_controller_https_nodeport" {
 }
 
 # Add-ons Configuration
-variable "install_certmanager" {
-  type    = bool
-  default = true
-}
-
 variable "certmanager_release" {
   type        = string
   description = "Version of cert-manager to install"
@@ -188,29 +178,14 @@ variable "certmanager_email_address" {
   description = "Your email address for certification manager"
 }
 
-variable "install_longhorn" {
-  type    = bool
-  default = true
-}
-
 variable "longhorn_release" {
   type        = string
   description = "Version of Longhorn to install"
 }
 
-variable "install_argocd" {
-  type    = bool
-  default = true
-}
-
 variable "argocd_release" {
   type        = string
   description = "Version of ArgoCD to install"
-}
-
-variable "install_argocd_image_updater" {
-  type    = bool
-  default = true
 }
 
 variable "argocd_image_updater_release" {

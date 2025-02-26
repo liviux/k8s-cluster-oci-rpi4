@@ -8,7 +8,6 @@ resource "random_password" "k3s_token" {
 locals {
   k3s_common_vars = {
     k3s_version                       = var.k3s_version
-    k3s_subnet                        = var.k3s_subnet
     k3s_token                         = random_password.k3s_token.result
     k3s_url                           = oci_load_balancer_load_balancer.k3s_load_balancer.ip_address_details[0].ip_address
     ingress_controller_http_nodeport  = var.ingress_controller_http_nodeport
@@ -25,7 +24,6 @@ data "cloudinit_config" "k3s_server_tpl" {
     content_type = "text/x-shellscript"
     content = templatefile("${path.module}/scripts/k3s-install-server.sh", merge(local.k3s_common_vars, {
       is_k3s_server                 = true
-      install_certmanager           = var.install_certmanager
       certmanager_release           = var.certmanager_release
       certmanager_email_address     = var.certmanager_email_address
       compartment_ocid              = var.compartment_ocid
@@ -33,11 +31,8 @@ data "cloudinit_config" "k3s_server_tpl" {
       k3s_tls_san                   = oci_load_balancer_load_balancer.k3s_load_balancer.ip_address_details[0].ip_address
       expose_kubeapi                = var.expose_kubeapi
       k3s_tls_san_public            = local.public_lb_ip[0]
-      install_argocd                = var.install_argocd
       argocd_release                = var.argocd_release
-      install_argocd_image_updater  = var.install_argocd_image_updater
       argocd_image_updater_release  = var.argocd_image_updater_release
-      install_longhorn              = var.install_longhorn
       longhorn_release              = var.longhorn_release
     }))
   }
@@ -54,7 +49,6 @@ data "cloudinit_config" "k3s_worker_tpl" {
       is_k3s_server    = false
       http_lb_port     = var.http_lb_port
       https_lb_port    = var.https_lb_port
-      install_longhorn = var.install_longhorn
       timestamp        = timestamp()
     }))
   }
