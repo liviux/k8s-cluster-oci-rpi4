@@ -546,6 +546,161 @@ check_argocd_image_updater() {
     return $status
 }
 
+check_etcd() {
+    echo -e "\n${YELLOW}===== Checking etcd cluster health =====${NC}"
+    
+    local status=0
+    
+    # Check if etcdctl is installed
+    if ! command -v etcdctl &> /dev/null; then
+        echo "etcdctl not found. Installing etcd-client..."
+        if command -v apt-get &> /dev/null; then
+            sudo apt-get update -qq && sudo apt-get install -y etcd-client >/dev/null 2>&1
+        elif command -v yum &> /dev/null; then
+            sudo yum install -y etcd >/dev/null 2>&1
+        elif command -v apk &> /dev/null; then
+            sudo apk add --no-cache etcd-client >/dev/null 2>&1
+        else
+            echo -e "${RED}→ Could not install etcd-client. Package manager not found.${NC}"
+            status=1
+            print_status $status "etcd health check"
+            return $status
+        fi
+
+        # Verify installation succeeded
+        if ! command -v etcdctl &> /dev/null; then
+            echo -e "${RED}→ etcdctl installation failed${NC}"
+            status=1
+            print_status $status "etcd health check"
+            return $status
+        else
+            echo -e "${GREEN}→ etcdctl successfully installed${NC}"
+        fi
+    else
+        echo -e "${GREEN}→ etcdctl is already installed${NC}"
+    fi
+
+    # Get etcdctl version
+    local etcdctl_version=$(etcdctl version 2>/dev/null | grep etcdctl || echo "Unknown")
+    echo -e "etcdctl version: ${GREEN}$etcdctl_version${NC}"
+    
+    # Check if K3s etcd certificates exist - using sudo to check for file existence
+    local cert_path="/var/lib/rancher/k3s/server/tls/etcd"
+    local cacert="$cert_path/server-ca.crt"
+    local cert="$cert_path/server-client.crt"
+    local key="$cert_path/server-client.key"
+    
+    # Check if files exist using sudo
+    local cacert_exists=$(sudo test -f "$cacert" && echo "yes" || echo "no")
+    local cert_exists=$(sudo test -f "$cert" && echo "yes" || echo "no")
+    local key_exists=$(sudo test -f "$key" && echo "yes" || echo "no")
+    
+    if [[ "$cacert_exists" == "yes" && "$cert_exists" == "yes" && "$key_exists" == "yes" ]]; then
+        echo -e "${GREEN}→ K3s etcd certificates found${NC}"
+        
+        # Set etcdctl environment and command prefix with sudo
+        export ETCDCTL_API=3
+        local etcdctl_cmd="sudo ETCDCTL_API=3 etcdctl --cacert=$cacert --cert=$cert --key=$key"
+        
+        # Try to discover endpoints using member list without specifying endpoints
+        # This requires the node where the script is running to either be an etcd node
+        # or have the environment variables ETCDCTL_ENDPOINTS set.
+        echo "Discovering etcd endpoints..."
+        local endpoints=""
+        local member_list_output=""
+        
+        # Try member list without endpoints which will work if we're on the same host as etcd or default endpoint
+        member_list_output=$($etcdctl_cmd member list 2>/dev/null || echo "")
+        
+        if [[ -z "$member_list_output" ]]; then
+            echo -e "${RED}→ Failed to list members. Make sure you're running this script on a K3s server node.${NC}"
+            status=1
+            print_status $status "etcd health check"
+            return $status
+        fi
+        
+        # Extract endpoints from member list
+        endpoints=$(echo "$member_list_output" | grep -o 'https://[^,]*:2379' | tr '\n' ',' | sed 's/,$//')
+        
+        if [[ -z "$endpoints" ]]; then
+            echo -e "${RED}→ Could not extract endpoints from member list${NC}"
+            status=1
+            print_status $status "etcd health check"
+            return $status
+        else
+            echo -e "${GREEN}→ Discovered etcd endpoints: $endpoints${NC}"
+        fi
+        
+        # Show member list
+        echo -e "\n${YELLOW}etcd Member List:${NC}"
+        echo "$member_list_output" | column -t -s, 2>/dev/null || echo "$member_list_output"
+        
+        # Check endpoint status
+        echo -e "\n${YELLOW}etcd Endpoint Status:${NC}"
+        local endpoint_status
+        endpoint_status=$($etcdctl_cmd --endpoints="$endpoints" endpoint status -w table 2>/dev/null)
+        if [[ $? -ne 0 ]]; then
+            echo -e "${RED}→ Failed to get endpoint status${NC}"
+            status=1
+        else
+            echo "$endpoint_status"
+            
+            # Extract etcd version from status correctly
+            # Look for VERSION column and extract the version number
+            local etcd_version
+            if [[ "$endpoint_status" == *"VERSION"* ]]; then
+                # First, try to get the version from the table, which is probably 3.x.y
+                etcd_version=$(echo "$endpoint_status" | grep -v ENDPOINT | awk '{print $3}' | head -1)
+                if [[ -z "$etcd_version" || "$etcd_version" == "" ]]; then
+                    # Fallback to direct parsing from JSON if table format fails
+                    etcd_version=$($etcdctl_cmd --endpoints="$(echo $endpoints | cut -d, -f1)" endpoint status --write-out=json 2>/dev/null | 
+                        grep -o '"version":"[^"]*"' | head -1 | cut -d'"' -f4)
+                fi
+            fi
+            
+            if [[ -z "$etcd_version" ]]; then
+                etcd_version="Unknown"
+            fi
+            
+            echo -e "etcd server version: ${GREEN}$etcd_version${NC}"
+        fi
+        
+        # Check endpoint health
+        echo -e "\n${YELLOW}etcd Endpoint Health:${NC}"
+        $etcdctl_cmd --endpoints="$endpoints" endpoint health -w table 2>/dev/null || {
+            echo -e "${RED}→ Failed to get endpoint health${NC}"
+            status=1
+        }
+        
+        # Get cluster information
+        echo -e "\n${YELLOW}etcd Cluster Information:${NC}"
+        echo "Leader: "
+        $etcdctl_cmd --endpoints="$endpoints" endpoint status --write-out=json 2>/dev/null | 
+            grep -o '"leader":[^,]*' | head -1 || echo "Could not determine leader"
+        
+        # Get alarm list
+        echo -e "\nAlarms: "
+        $etcdctl_cmd --endpoints="$endpoints" alarm list 2>/dev/null || echo "Could not get alarms"
+        
+        # Get DB size and compaction stats
+        echo -e "\n${YELLOW}etcd DB Stats:${NC}"
+        $etcdctl_cmd --endpoints="$(echo $endpoints | cut -d, -f1)" endpoint status --write-out=json 2>/dev/null || echo "Could not get DB stats"
+    else
+        echo -e "${RED}→ K3s etcd certificates not found or not accessible at $cert_path${NC}"
+        echo "Locations checked:"
+        echo "CA cert: $cacert - $([ "$cacert_exists" == "yes" ] && echo "Found" || echo "Not found")"
+        echo "Cert: $cert - $([ "$cert_exists" == "yes" ] && echo "Found" || echo "Not found")"
+        echo "Key: $key - $([ "$key_exists" == "yes" ] && echo "Found" || echo "Not found")"
+        
+        echo -e "${YELLOW}→ This might be a permissions issue. The script needs sudo access to etcd certificates.${NC}"
+        echo "Try running the script with sudo or as root."
+        status=1
+    fi
+    
+    print_status $status "etcd health check"
+    return $status
+}
+
 get_component_versions() {
     echo -e "\n${YELLOW}===== Component Versions =====${NC}"
     
@@ -814,6 +969,11 @@ if ! check_traefik; then
 fi
 
 if ! check_argocd_image_updater; then
+    OVERALL_STATUS=1
+fi
+
+# Add etcd health check
+if ! check_etcd; then
     OVERALL_STATUS=1
 fi
 
