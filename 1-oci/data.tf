@@ -23,7 +23,6 @@ data "cloudinit_config" "k3s_server_tpl" {
   part {
     content_type = "text/x-shellscript"
     content = templatefile("${path.module}/scripts/k3s-install-server.sh", merge(local.k3s_common_vars, {
-      is_k3s_server                 = true
       certmanager_release           = var.certmanager_release
       certmanager_email_address     = var.certmanager_email_address
       compartment_ocid              = var.compartment_ocid
@@ -34,6 +33,7 @@ data "cloudinit_config" "k3s_server_tpl" {
       argocd_release                = var.argocd_release
       argocd_image_updater_release  = var.argocd_image_updater_release
       longhorn_release              = var.longhorn_release
+      traefik_release               = var.traefik_release
     }))
   }
 }
@@ -46,7 +46,6 @@ data "cloudinit_config" "k3s_worker_tpl" {
   part {
     content_type = "text/x-shellscript"
     content = templatefile("${path.module}/scripts/k3s-install-agent.sh", merge(local.k3s_common_vars, {
-      is_k3s_server    = false
       http_lb_port     = var.http_lb_port
       https_lb_port    = var.https_lb_port
       timestamp        = timestamp()

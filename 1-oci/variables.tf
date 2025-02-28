@@ -193,6 +193,11 @@ variable "argocd_image_updater_release" {
   description = "Version of ArgoCD Image Updater to install"
 }
 
+variable "traefik_release" {
+  type        = string
+  description = "Version of Traefik to install"
+}
+
 variable "expose_kubeapi" {
   type    = bool
   default = false
