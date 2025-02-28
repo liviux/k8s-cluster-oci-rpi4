@@ -267,7 +267,7 @@ install_components() {
     log "INFO" "Installing Helm"
     curl -fsSL -o /root/get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3
     chmod 700 /root/get_helm.sh
-    retry_command "/root/get_helm.sh" "Helm installation"
+    retry_command "/root/get_helm.sh --version ${helm_version}" "Helm installation"
     rm -f /root/get_helm.sh
     
     helm repo add longhorn https://charts.longhorn.io || true

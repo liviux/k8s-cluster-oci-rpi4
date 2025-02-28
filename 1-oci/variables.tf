@@ -197,6 +197,11 @@ variable "traefik_release" {
   type        = string
   description = "Version of Traefik to install"
 }
+  
+variable "helm_version" {
+  type        = string
+  description = "Version of Helm to install"
+}
 
 variable "expose_kubeapi" {
   type    = bool

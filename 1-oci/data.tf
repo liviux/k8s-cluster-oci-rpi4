@@ -33,7 +33,8 @@ data "cloudinit_config" "k3s_server_tpl" {
       argocd_release                = var.argocd_release
       argocd_image_updater_release  = var.argocd_image_updater_release
       longhorn_release              = var.longhorn_release
-      traefik_release               = var.traefik_release
+      traefik_release               = var.traefik_release      
+      helm_version                  = var.helm_version
     }))
   }
 }
