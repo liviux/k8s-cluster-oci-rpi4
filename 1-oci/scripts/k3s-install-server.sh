@@ -183,8 +183,9 @@ EOF
 setup_system() {
     log "INFO" "Setting up system requirements"
     
-    systemctl disable --now netfilter-persistent.service || true
     /usr/sbin/netfilter-persistent flush || true
+    systemctl stop netfilter-persistent.service || true
+    systemctl mask --now netfilter-persistent.service || true
     
     log "INFO" "Updating system packages"
     apt-get update
@@ -194,6 +195,9 @@ setup_system() {
     DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -y \
         python3 python3-full python3-venv \
         git curl ca-certificates gnupg apt-transport-https open-iscsi util-linux
+
+    apt-get clean
+    rm -rf /var/lib/apt/lists/*
     
     log "INFO" "Configuring journald"
     mkdir -p /etc/systemd/journald.conf.d/
@@ -233,7 +237,7 @@ determine_instance_role() {
 install_k3s() {
     log "INFO" "Preparing K3s installation"
     
-    local k3s_install_params=("--tls-san ${k3s_tls_san}" "--disable traefik")
+    local k3s_install_params=("--tls-san ${k3s_tls_san}" "--disable traefik" "--disable local-storage" "--write-kubeconfig-mode 644")
     
     %{ if expose_kubeapi }
     k3s_install_params+=("--tls-san ${k3s_tls_san_public}")
@@ -280,7 +284,6 @@ install_components() {
     kubectl create namespace longhorn-system || true
     retry_command "helm upgrade --install longhorn longhorn/longhorn \
                  --namespace longhorn-system \
-                 --create-namespace \
                  --wait --timeout $HELM_TIMEOUT \
                  --version ${longhorn_release}" "Longhorn installation"
     

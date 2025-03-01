@@ -39,6 +39,9 @@ setup_system() {
       log "ERROR" "apt-get install failed: $(DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends apt-utils software-properties-common jq python3 open-iscsi curl util-linux 2>&1)"
       exit 1
     fi
+    
+    apt-get clean
+    rm -rf /var/lib/apt/lists/*
 
     cat > /etc/systemd/journald.conf <<EOF
 SystemMaxUse=$${JOURNAL_MAX_SIZE}
