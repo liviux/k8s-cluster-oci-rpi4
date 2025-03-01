@@ -21,37 +21,44 @@ cleanup() {
 
 setup_system() {
     log "INFO" "Setting up system requirements"
+
+    /usr/sbin/netfilter-persistent flush || true
+    systemctl stop netfilter-persistent.service || true
+    systemctl disable netfilter-persistent.service || true
+
+    apt-get update
+    if ! DEBIAN_FRONTEND=noninteractive apt-get upgrade -y; then
+       log "ERROR" "apt-get upgrade failed: $(DEBIAN_FRONTEND=noninteractive apt-get upgrade -y 2>&1)"
+       exit 1
+    fi
+
+    if ! DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+        apt-utils software-properties-common jq python3 python3-full \
+        python3-venv open-iscsi curl util-linux; then
+
+      log "ERROR" "apt-get install failed: $(DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends apt-utils software-properties-common jq python3 open-iscsi curl util-linux 2>&1)"
+      exit 1
+    fi
     
-    systemctl stop netfilter-persistent.service
-    systemctl disable netfilter-persistent.service
-    /usr/sbin/netfilter-persistent flush
-    
-    apt-get update && DEBIAN_FRONTEND=noninteractive apt-get upgrade -y
-    apt-get install -y software-properties-common jq
-    
+    apt-get clean
+    rm -rf /var/lib/apt/lists/*
+
     cat > /etc/systemd/journald.conf <<EOF
 SystemMaxUse=$${JOURNAL_MAX_SIZE}
 SystemMaxFileSize=$${JOURNAL_MAX_SIZE}
 EOF
     systemctl restart systemd-journald
-}
 
-install_oci_cli() {
-    log "INFO" "Installing OCI CLI"
-    DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -y \
-        python3 python3-full nginx python3-venv
-        
-    python3 -m venv /opt/oci-cli-venv
-    /opt/oci-cli-venv/bin/pip install oci-cli
-    ln -sf /opt/oci-cli-venv/bin/oci /usr/local/bin/oci
+    systemctl enable --now iscsid.service
 }
 
 wait_for_api_server() {
     log "INFO" "Waiting for K3s API server"
     until curl --output /dev/null --silent -k https://${k3s_url}:6443; do
-        log "INFO" "Waiting for API server..."
+        log "INFO" "API server not yet available, waiting 5 seconds..."
         sleep 5
     done
+    log "INFO" "K3s API server is responsive."
 }
 
 install_k3s() {
@@ -75,20 +82,11 @@ install_k3s() {
     done
 }
 
-setup_longhorn() {
-    log "INFO" "Setting up Longhorn requirements"
-    DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -y \
-        open-iscsi curl util-linux
-    systemctl enable --now iscsid.service
-}
-
 main() {
     log "INFO" "Starting K3s agent installation"
     setup_system
-    install_oci_cli
     wait_for_api_server
     install_k3s
-    setup_longhorn
     log "INFO" "K3s agent installation completed successfully"
 }
 

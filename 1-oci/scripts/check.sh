@@ -712,10 +712,6 @@ get_component_versions() {
     local containerd_version=$(kubectl get nodes -o jsonpath='{.items[0].status.nodeInfo.containerRuntimeVersion}')
     echo -e "Container Runtime: ${GREEN}$containerd_version${NC}"
             
-    # Get local-path-provisioner version
-    local local_path_version=$(kubectl -n kube-system get deployment local-path-provisioner -o jsonpath='{.spec.template.spec.containers[0].image}' 2>/dev/null | cut -d: -f2 || echo "Not found")
-    echo -e "Local-Path-Provisioner Version: ${GREEN}$local_path_version${NC}"
-    
     # Get metrics-server version
     local metrics_server_version=$(kubectl -n kube-system get deployment metrics-server -o jsonpath='{.spec.template.spec.containers[0].image}' 2>/dev/null | cut -d: -f2 || echo "Not found")
     echo -e "Metrics-Server Version: ${GREEN}$metrics_server_version${NC}"
