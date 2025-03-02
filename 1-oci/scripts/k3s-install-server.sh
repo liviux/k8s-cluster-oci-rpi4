@@ -237,7 +237,12 @@ determine_instance_role() {
 install_k3s() {
     log "INFO" "Preparing K3s installation"
     
-    local k3s_install_params=("--tls-san ${k3s_tls_san}" "--disable traefik" "--disable local-storage" "--write-kubeconfig-mode 644")
+    local k3s_install_params=(
+        "--tls-san ${k3s_tls_san}"
+        "--disable traefik"
+        "--disable local-storage"
+        "--write-kubeconfig-mode 644"
+    )
     
     %{ if expose_kubeapi }
     k3s_install_params+=("--tls-san ${k3s_tls_san_public}")
