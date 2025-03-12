@@ -20,6 +20,10 @@
 # - Argo CD deployment and sync status
 # - Argo CD Image Updater functionality
 #
+# Network Security Components:
+# - Cilium CNI functionality
+# - Tetragon security monitoring
+#
 # Integration Testing:
 # - Deploys a test application that validates:
 #   * Storage provisioning (Longhorn)
@@ -37,6 +41,8 @@
 #
 
 set -euo pipefail
+export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+
 
 # Color codes for better visibility
 RED='\033[0;31m'
@@ -51,9 +57,11 @@ NC='\033[0m' # No Color
 : ${KUBE_SYSTEM_NAMESPACE:="kube-system"}
 : ${DEFAULT_NAMESPACE:="default"}
 : ${TRAEFIK_NAMESPACE:="traefik"}
+: ${CILIUM_NAMESPACE:="kube-system"}
+: ${TETRAGON_NAMESPACE:="kube-system"}
 
 # List of namespaces to check
-NAMESPACES=("$ARGOCD_NAMESPACE" "$LONGHORN_NAMESPACE" "$CERT_MANAGER_NAMESPACE" "$KUBE_SYSTEM_NAMESPACE" "$TRAEFIK_NAMESPACE")
+NAMESPACES=("$ARGOCD_NAMESPACE" "$LONGHORN_NAMESPACE" "$CERT_MANAGER_NAMESPACE" "$KUBE_SYSTEM_NAMESPACE" "$TRAEFIK_NAMESPACE" "$TETRAGON_NAMESPACE")
 
 # Array to store errors
 declare -a ERROR_LIST
@@ -701,48 +709,557 @@ check_etcd() {
     return $status
 }
 
+install_cilium_cli() {
+    echo -e "\n${YELLOW}===== Installing Cilium CLI =====${NC}"
+    
+    local status=0
+    local CILIUM_CLI_VERSION=$(curl -s https://raw.githubusercontent.com/cilium/cilium-cli/main/stable.txt)
+    local CLI_ARCH=amd64
+    
+    if [ "$(uname -m)" = "aarch64" ] || [ "$(uname -m)" = "arm64" ]; then
+        CLI_ARCH=arm64
+    fi
+
+    echo "Detected architecture: $CLI_ARCH"
+    echo "Installing Cilium CLI version: $CILIUM_CLI_VERSION"
+    
+    if command -v cilium &> /dev/null; then
+        echo -e "${GREEN}→ Cilium CLI already installed. Current version:${NC}"
+        cilium version | grep "cilium-cli" || echo "Unable to detect version"
+        return 0
+    fi
+
+    local TMP_DIR=$(mktemp -d)
+    curl -L --fail --remote-name-all https://github.com/cilium/cilium-cli/releases/download/${CILIUM_CLI_VERSION}/cilium-linux-${CLI_ARCH}.tar.gz -o ${TMP_DIR}/cilium.tar.gz
+    
+    if [ $? -ne 0 ]; then
+        echo -e "${RED}→ Failed to download Cilium CLI${NC}"
+        rm -rf ${TMP_DIR}
+        status=1
+        print_status $status "Cilium CLI installation"
+        return $status
+    fi
+    
+    echo "Extracting and installing Cilium CLI..."
+    tar -C ${TMP_DIR} -xf ${TMP_DIR}/cilium.tar.gz
+    sudo cp ${TMP_DIR}/cilium /usr/local/bin/cilium
+    rm -rf ${TMP_DIR}
+    
+    if command -v cilium &> /dev/null; then
+        echo -e "${GREEN}→ Cilium CLI installed successfully:${NC}"
+        cilium version | grep "cilium-cli" || echo "Version check failed"
+    else
+        echo -e "${RED}→ Cilium CLI installation failed${NC}"
+        status=1
+    fi
+    
+    print_status $status "Cilium CLI installation"
+    return $status
+}
+
+install_tetra_cli() {
+    echo -e "\n${YELLOW}===== Installing Tetra CLI =====${NC}"
+    
+    local status=0
+    local CLI_ARCH=amd64
+    
+    if [ "$(uname -m)" = "aarch64" ] || [ "$(uname -m)" = "arm64" ]; then
+        CLI_ARCH=arm64
+    fi
+
+    echo "Detected architecture: $CLI_ARCH"
+    
+    if command -v tetra &> /dev/null; then
+        echo -e "${GREEN}→ Tetra CLI already installed. Current version:${NC}"
+        tetra version || echo "Unable to detect version"
+        return 0
+    fi
+
+    local TMP_DIR=$(mktemp -d)
+    echo "Downloading latest Tetra CLI release..."
+    curl -L --fail "https://github.com/cilium/tetragon/releases/latest/download/tetra-linux-${CLI_ARCH}.tar.gz" -o ${TMP_DIR}/tetra.tar.gz
+    
+    if [ $? -ne 0 ]; then
+        echo -e "${RED}→ Failed to download Tetra CLI${NC}"
+        rm -rf ${TMP_DIR}
+        status=1
+        print_status $status "Tetra CLI installation"
+        return $status
+    fi
+    
+    echo "Extracting and installing Tetra CLI..."
+    tar -C ${TMP_DIR} -xf ${TMP_DIR}/tetra.tar.gz
+    sudo mv ${TMP_DIR}/tetra /usr/local/bin/tetra
+    rm -rf ${TMP_DIR}
+    
+    if command -v tetra &> /dev/null; then
+        echo -e "${GREEN}→ Tetra CLI installed successfully:${NC}"
+        tetra version || echo "Version check failed"
+    else
+        echo -e "${RED}→ Tetra CLI installation failed${NC}"
+        status=1
+    fi
+    
+    print_status $status "Tetra CLI installation"
+    return $status
+}
+
+install_hubble_cli() {
+    echo -e "\n${YELLOW}===== Installing Hubble CLI =====${NC}"
+    
+    local status=0
+    local HUBBLE_CLI_VERSION=$(curl -s https://raw.githubusercontent.com/cilium/hubble/master/stable.txt)
+    local CLI_ARCH=amd64
+    
+    if [ "$(uname -m)" = "aarch64" ] || [ "$(uname -m)" = "arm64" ]; then
+        CLI_ARCH=arm64
+    fi
+
+    echo "Detected architecture: $CLI_ARCH"
+    echo "Installing Hubble CLI version: $HUBBLE_CLI_VERSION"
+    
+    if command -v hubble &> /dev/null; then
+        echo -e "${GREEN}→ Hubble CLI already installed. Current version:${NC}"
+        hubble version || echo "Unable to detect version"
+        return 0
+    fi
+
+    local TMP_DIR=$(mktemp -d)
+    echo "Downloading Hubble CLI release..."
+    curl -L --fail --remote-name-all https://github.com/cilium/hubble/releases/download/${HUBBLE_CLI_VERSION}/hubble-linux-${CLI_ARCH}.tar.gz -o ${TMP_DIR}/hubble.tar.gz
+    
+    if [ $? -ne 0 ]; then
+        echo -e "${RED}→ Failed to download Hubble CLI${NC}"
+        rm -rf ${TMP_DIR}
+        status=1
+        print_status $status "Hubble CLI installation"
+        return $status
+    fi
+    
+    echo "Extracting and installing Hubble CLI..."
+    tar -C ${TMP_DIR} -xf ${TMP_DIR}/hubble.tar.gz
+    sudo cp ${TMP_DIR}/hubble /usr/local/bin/hubble
+    rm -rf ${TMP_DIR}
+    
+    if command -v hubble &> /dev/null; then
+        echo -e "${GREEN}→ Hubble CLI installed successfully:${NC}"
+        hubble version || echo "Version check failed"
+    else
+        echo -e "${RED}→ Hubble CLI installation failed${NC}"
+        status=1
+    fi
+    
+    print_status $status "Hubble CLI installation"
+    return $status
+}
+
+check_cilium() {
+    echo -e "\n${YELLOW}===== Checking Cilium health =====${NC}"
+    
+    local status=0
+    
+    # Check if Cilium pods are running in the configured namespace
+    echo "Checking for Cilium pods..."
+    if kubectl get pods -n "$CILIUM_NAMESPACE" -l k8s-app=cilium 2>/dev/null | grep -q Running; then
+        echo -e "${GREEN}→ Cilium pods are running${NC}"
+    else
+        echo -e "${RED}→ Cilium pods not found or not running in namespace $CILIUM_NAMESPACE${NC}"
+        # Try to find Cilium in other namespaces
+        local other_ns=$(kubectl get pods --all-namespaces | grep cilium | awk '{print $1}' | sort | uniq | head -1)
+        if [[ -n "$other_ns" && "$other_ns" != "$CILIUM_NAMESPACE" ]]; then
+            echo -e "${YELLOW}→ Cilium pods found in namespace: $other_ns${NC}"
+            export CILIUM_NAMESPACE="$other_ns"
+        else
+            status=1
+            print_status $status "Cilium health check"
+            return $status
+        fi
+    fi
+    
+    # Check for Cilium CLI tool
+    if ! command -v cilium &> /dev/null; then
+        echo -e "${YELLOW}→ Cilium CLI not found, attempting to install...${NC}"
+        if ! install_cilium_cli; then
+            echo -e "${RED}→ Cilium CLI installation failed, continuing with basic checks only${NC}"
+        fi
+    fi
+    
+    # Run Cilium status check if CLI is available
+    if command -v cilium &> /dev/null; then
+        echo -e "\n${YELLOW}Cilium CLI Status:${NC}"
+        if ! cilium status; then
+            echo -e "${RED}→ Cilium status check failed${NC}"
+            status=1
+        else
+            echo -e "${GREEN}→ Cilium status check passed${NC}"
+        fi
+                
+        # Check Cilium connectivity
+        echo -e "\n${YELLOW}Cilium Connectivity Test:${NC}"
+        echo -e "\n${YELLOW}Running only client-ingress,client-egress,dns-only tests. If you want to run all of them (112+) you need to modify line below in code${NC}"
+        if cilium connectivity test --test client-ingress,client-egress,dns-only tests; then
+            echo -e "${GREEN}→ Basic connectivity tests passed${NC}"
+        else
+            echo -e "${YELLOW}→ Some connectivity tests failed${NC}"
+            # Don't fail the whole check for this, it's a more aggressive test
+        fi
+        
+        # Run Cilium connectivity performance test
+        echo -e "\n${YELLOW}Cilium Connectivity Performance Test:${NC}"
+        echo "Running network performance tests (this might take a moment)..."
+        if cilium connectivity perf; then
+            echo -e "${GREEN}→ Connectivity performance test completed successfully${NC}"
+        else
+            echo -e "${YELLOW}→ Connectivity performance test completed with issues${NC}"
+            # Don't mark the whole check as failed for performance issues
+        fi
+    else
+        # Fallback to kubectl for basic checks
+        echo -e "\n${YELLOW}Cilium Status (via kubectl):${NC}"
+        kubectl get pods -n "$CILIUM_NAMESPACE" -l k8s-app=cilium
+        
+        echo -e "\n${YELLOW}Cilium DaemonSet Status:${NC}"
+        kubectl get ds -n "$CILIUM_NAMESPACE" -l k8s-app=cilium
+        
+        # Check for CiliumNetworkPolicies
+        echo -e "\n${YELLOW}Cilium Network Policies:${NC}"
+        kubectl get ciliumnetworkpolicies --all-namespaces 2>/dev/null || echo "No CiliumNetworkPolicies found or CRD not installed"
+    fi
+    
+    # Check Cilium operator
+    echo -e "\n${YELLOW}Checking Cilium Operator:${NC}"
+    if kubectl get pods -n "$CILIUM_NAMESPACE" -l name=cilium-operator 2>/dev/null | grep -q Running; then
+        echo -e "${GREEN}→ Cilium operator is running${NC}"
+    else
+        echo -e "${RED}→ Cilium operator pods not found or not running${NC}"
+        status=1
+    fi
+    
+    # Get Cilium version from pods
+    local cilium_version=$(kubectl get pods -n "$CILIUM_NAMESPACE" -l k8s-app=cilium -o jsonpath='{.items[0].spec.containers[0].image}' 2>/dev/null | cut -d: -f2)
+    echo -e "Cilium version: ${GREEN}$cilium_version${NC}"
+    
+    print_status $status "Cilium health check"
+    return $status
+}
+
+check_tetragon() {
+    echo -e "\n${YELLOW}===== Checking Tetragon health =====${NC}"
+
+    local status=0
+
+    # Check if Tetragon pods are running in the configured namespace
+    echo "Checking for Tetragon pods..."
+
+    # Use the correct label selector AND check for running pods directly
+    local tetragon_pods=$(kubectl get pods -n "$TETRAGON_NAMESPACE" -l app.kubernetes.io/name=tetragon --field-selector=status.phase=Running -o jsonpath='{.items[*].metadata.name}' 2>/dev/null)
+
+    if [[ -n "$tetragon_pods" ]]; then
+        echo -e "${GREEN}→ Tetragon pods are running${NC}"
+    else
+        echo -e "${RED}→ Tetragon pods not found in namespace $TETRAGON_NAMESPACE${NC}"
+        # Try to find Tetragon in other namespaces (fallback)
+        local other_ns=$(kubectl get pods --all-namespaces | grep tetragon | awk '{print $1}' | sort | uniq | head -1)
+        if [[ -n "$other_ns" && "$other_ns" != "$TETRAGON_NAMESPACE" ]]; then
+            echo -e "${YELLOW}→ Tetragon pods found in namespace: $other_ns${NC}"
+            export TETRAGON_NAMESPACE="$other_ns"
+        else
+            echo -e "${YELLOW}→ Tetragon might not be installed${NC}"
+            print_status $status "Tetragon health check"
+            return $status
+        fi
+    fi
+
+    # Check for Tetra CLI tool
+    if ! command -v tetra &> /dev/null; then
+        echo -e "${YELLOW}→ Tetra CLI not found, attempting to install...${NC}"
+        if ! install_tetra_cli; then
+            echo -e "${RED}→ Tetra CLI installation failed, continuing with basic checks only${NC}"
+        fi
+    fi
+
+    # Run Tetragon status check if CLI is available
+    if command -v tetra &> /dev/null; then
+        echo -e "\n${YELLOW}Tetragon Status:${NC}"
+
+        # Get tetragon pod
+        local tetragon_pod=$(kubectl get pods -n "$TETRAGON_NAMESPACE" -l app.kubernetes.io/name=tetragon -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)
+
+        if [[ -n "$tetragon_pod" ]]; then
+            echo "Using Tetragon pod: $tetragon_pod"
+            
+            # Check if port-forward is needed for tetra status
+            echo "Setting up port-forward to Tetragon..."
+            kubectl port-forward -n "$TETRAGON_NAMESPACE" "pod/$tetragon_pod" 54321:54321 >/dev/null 2>&1 &
+            local pf_pid=$!
+            sleep 3
+            
+            # Run tetra status on local machine (not in the pod)
+            if tetra status --server-address localhost:54321; then
+                echo -e "${GREEN}→ Tetragon status check passed${NC}"
+            else
+                echo -e "${YELLOW}→ Tetragon status with port-forward failed, trying Unix socket...${NC}"
+                # Kill the port-forward process
+                kill ${pf_pid} >/dev/null 2>&1 || true
+                wait ${pf_pid} 2>/dev/null || true
+                
+                # Alternative approach - check pod status only
+                if kubectl get pod -n "$TETRAGON_NAMESPACE" "$tetragon_pod" -o jsonpath='{.status.phase}' | grep -q "Running"; then
+                    echo -e "${GREEN}→ Tetragon pod is running${NC}"
+                else
+                    echo -e "${RED}→ Tetragon pod is not in Running state${NC}"
+                    status=1
+                fi
+            fi
+            
+            # Clean up port-forward if it's still running
+            kill ${pf_pid} >/dev/null 2>&1 || true
+            wait ${pf_pid} 2>/dev/null || true
+        else
+            echo -e "${RED}→ Cannot find a Tetragon pod to connect to${NC}"
+            status=1
+        fi
+    else
+        # Fallback to kubectl for basic checks
+        echo -e "\n${YELLOW}Tetragon Status (via kubectl):${NC}"
+        kubectl get pods -n "$TETRAGON_NAMESPACE" -l app.kubernetes.io/name=tetragon
+
+        echo -e "\n${YELLOW}Tetragon DaemonSet Status:${NC}"
+        kubectl get ds -n "$TETRAGON_NAMESPACE" -l app.kubernetes.io/name=tetragon
+
+        # Check for TracingPolicy CRDs
+        echo -e "\n${YELLOW}Tetragon Tracing Policies:${NC}"
+        kubectl get tracingpolicies.cilium.io --all-namespaces 2>/dev/null || echo "No TracingPolicies found or CRD not installed"
+    fi
+}
+
+check_hubble() {
+    echo -e "\n${YELLOW}===== Checking Hubble health =====${NC}"
+    
+    local status=0
+    
+    # Check if Hubble pods are running in the configured namespace
+    echo "Checking for Hubble pods..."
+    if kubectl get pods -n "$CILIUM_NAMESPACE" -l k8s-app=hubble-relay 2>/dev/null | grep -q Running; then
+        echo -e "${GREEN}→ Hubble relay pods are running${NC}"
+    else
+        # Try alternative label if the first one doesn't work
+        if kubectl get pods -n "$CILIUM_NAMESPACE" -l app=hubble-relay 2>/dev/null | grep -q Running; then
+            echo -e "${GREEN}→ Hubble relay pods are running${NC}"
+        else
+            echo -e "${YELLOW}→ Hubble relay pods not found or not running${NC}"
+            echo "Checking for Hubble UI pods instead..."
+            
+            if kubectl get pods -n "$CILIUM_NAMESPACE" -l k8s-app=hubble-ui 2>/dev/null | grep -q Running; then
+                echo -e "${GREEN}→ Hubble UI pods are running${NC}"
+            else
+                echo -e "${RED}→ Neither Hubble relay nor UI pods found running${NC}"
+                echo -e "${YELLOW}→ Hubble might not be enabled in your Cilium installation${NC}"
+                status=1
+                print_status $status "Hubble health check"
+                return $status
+            fi
+        fi
+    fi  # Fixed: Removed the erroneous closing brace and added correct one
+    
+    # Verify Hubble connectivity using the CLI
+    if command -v hubble &> /dev/null; then
+        echo -e "\n${YELLOW}Hubble CLI Status:${NC}"
+        
+        # Start port-forward to access Hubble Relay service
+        echo "Setting up port-forward to Hubble Relay..."
+        kubectl port-forward -n "$CILIUM_NAMESPACE" service/hubble-relay 4245:80 >/dev/null 2>&1 &
+        local pf_pid=$!
+        sleep 3
+        
+        # Test connectivity
+        if hubble status --server localhost:4245; then
+            echo -e "${GREEN}→ Hubble status check passed${NC}"
+        else
+            echo -e "${RED}→ Hubble status check failed${NC}"
+            status=1
+        fi
+        
+        # Try to list some nodes to verify functionality
+        echo -e "\n${YELLOW}Testing Hubble nodes listing:${NC}"
+        if hubble list nodes --server localhost:4245 2>/dev/null; then
+            echo -e "${GREEN}→ Successfully listed Hubble nodes${NC}"
+        else
+            echo -e "${RED}→ Failed to list Hubble nodes${NC}"
+            status=1
+        fi
+        
+        # Clean up port-forward
+        kill ${pf_pid} >/dev/null 2>&1 || true
+        wait ${pf_pid} 2>/dev/null || true
+    else
+        # Fallback checks when Hubble CLI is not available
+        echo -e "${YELLOW}→ Hubble CLI not available for detailed testing${NC}"
+        
+        # Check the Hubble-Relay service
+        if kubectl get service hubble-relay -n "$CILIUM_NAMESPACE" >/dev/null 2>&1; then
+            echo -e "${GREEN}→ Hubble Relay service exists${NC}"
+        else
+            echo -e "${RED}→ Hubble Relay service not found${NC}"
+            status=1
+        fi
+        
+        # Check Hubble UI service
+        if kubectl get service hubble-ui -n "$CILIUM_NAMESPACE" >/dev/null 2>&1; then
+            echo -e "${GREEN}→ Hubble UI service exists${NC}"
+        else
+            echo -e "${YELLOW}→ Hubble UI service not found${NC}"
+            # Don't fail just for missing UI
+        fi
+    fi
+    
+    print_status $status "Hubble health check"
+    return $status
+}
+
 get_component_versions() {
     echo -e "\n${YELLOW}===== Component Versions =====${NC}"
-    
+
     # Get k3s version
-    local k3s_version=$(kubectl get nodes -o jsonpath='{.items[0].status.nodeInfo.kubeletVersion}')
+    local k3s_version=$(kubectl get nodes -o jsonpath='{.items[0].status.nodeInfo.kubeletVersion}' 2>/dev/null || echo "Not found")
     echo -e "K3s Version: ${GREEN}$k3s_version${NC}"
-    
-    # Get containerd version
-    local containerd_version=$(kubectl get nodes -o jsonpath='{.items[0].status.nodeInfo.containerRuntimeVersion}')
-    echo -e "Container Runtime: ${GREEN}$containerd_version${NC}"
-            
-    # Get metrics-server version
-    local metrics_server_version=$(kubectl -n kube-system get deployment metrics-server -o jsonpath='{.spec.template.spec.containers[0].image}' 2>/dev/null | cut -d: -f2 || echo "Not found")
-    echo -e "Metrics-Server Version: ${GREEN}$metrics_server_version${NC}"
-    
+
+    # Get containerd version - Extract only the version number
+    local containerd_version=$(kubectl get nodes -o jsonpath='{.items[0].status.nodeInfo.containerRuntimeVersion}' 2>/dev/null || echo "Not found")
+    containerd_version=$(echo "$containerd_version" | awk -F'//' '{print $2}' | cut -d'-' -f1) # Use awk and cut
+    echo -e "Container Runtime (containerd): ${GREEN}$containerd_version${NC}"
+
     # Get Helm version
     local helm_version=$(helm version --short 2>/dev/null || echo "Not installed")
     echo -e "Helm Version: ${GREEN}$helm_version${NC}"
-    
+
     # Get Traefik version
-    local traefik_version=$(kubectl get deployment -n "$TRAEFIK_NAMESPACE" traefik -o jsonpath='{.spec.template.spec.containers[0].image}' | cut -d: -f2)
+    local traefik_version=$(kubectl get deployment -n "$TRAEFIK_NAMESPACE" traefik -o jsonpath='{.spec.template.spec.containers[0].image}' 2>/dev/null | cut -d: -f2 || echo "Not found")
     echo -e "Traefik Version: ${GREEN}$traefik_version${NC}"
-    
+
     # Get CoreDNS version
-    local coredns_version=$(kubectl get deployment -n "$KUBE_SYSTEM_NAMESPACE" coredns -o jsonpath='{.spec.template.spec.containers[0].image}' | cut -d: -f2)
+    local coredns_version=$(kubectl get deployment -n "$KUBE_SYSTEM_NAMESPACE" coredns -o jsonpath='{.spec.template.spec.containers[0].image}' 2>/dev/null | cut -d: -f2 || echo "Not found")
     echo -e "CoreDNS Version: ${GREEN}$coredns_version${NC}"
-    
+
     # Get Longhorn version
-    local longhorn_version=$(kubectl get deployment -n "$LONGHORN_NAMESPACE" longhorn-ui -o jsonpath='{.spec.template.spec.containers[0].image}' | cut -d: -f2)
+    local longhorn_version=$(kubectl get deployment -n "$LONGHORN_NAMESPACE" longhorn-ui -o jsonpath='{.spec.template.spec.containers[0].image}' 2>/dev/null | cut -d: -f2 || echo "Not found")
     echo -e "Longhorn Version: ${GREEN}$longhorn_version${NC}"
-    
+
     # Get Cert-Manager version
-    local certmanager_version=$(kubectl get deployment -n "$CERT_MANAGER_NAMESPACE" cert-manager -o jsonpath='{.spec.template.spec.containers[0].image}' | cut -d: -f2)
+    local certmanager_version=$(kubectl get deployment -n "$CERT_MANAGER_NAMESPACE" cert-manager -o jsonpath='{.spec.template.spec.containers[0].image}' 2>/dev/null | cut -d: -f2 || echo "Not found")
     echo -e "Cert-Manager Version: ${GREEN}$certmanager_version${NC}"
-    
+
     # Get Argo CD version
-    local argocd_version=$(kubectl get deployment -n "$ARGOCD_NAMESPACE" argocd-server -o jsonpath='{.spec.template.spec.containers[0].image}' | cut -d: -f2)
+    local argocd_version=$(kubectl get deployment -n "$ARGOCD_NAMESPACE" argocd-server -o jsonpath='{.spec.template.spec.containers[0].image}' 2>/dev/null | cut -d: -f2 || echo "Not found")
     echo -e "Argo CD Version: ${GREEN}$argocd_version${NC}"
-    
+
     # Get Argo CD Image Updater version
-    local argocd_image_updater_version=$(kubectl get deployment -n "$ARGOCD_NAMESPACE" argocd-image-updater -o jsonpath='{.spec.template.spec.containers[0].image}' | cut -d: -f2)
+    local argocd_image_updater_version=$(kubectl get deployment -n "$ARGOCD_NAMESPACE" argocd-image-updater -o jsonpath='{.spec.template.spec.containers[0].image}' 2>/dev/null | cut -d: -f2 || echo "Not found")
     echo -e "Argo CD Image Updater Version: ${GREEN}$argocd_image_updater_version${NC}"
+
+    # Get etcd server version
+    echo -e "\n${YELLOW}===== etcd Versions =====${NC}"
+
+    # Get etcd version from k3s
+    local etcd_version=""
+    local cert_path="/var/lib/rancher/k3s/server/tls/etcd"
+    local cacert="$cert_path/server-ca.crt"
+    local cert="$cert_path/server-client.crt"
+    local key="$cert_path/server-client.key"
+
+    # Check if certificates exist
+    if sudo test -f "$cacert" && sudo test -f "$cert" && sudo test -f "$key"; then
+        etcd_version=$(sudo ETCDCTL_API=3 etcdctl --cacert=$cacert --cert=$cert --key=$key endpoint status --write-out=json 2>/dev/null |
+            grep -o '"version":"[^"]*"' | head -1 | cut -d'"' -f4 || echo "Not available")
+    else
+        etcd_version="Not available (certificates not accessible)"
+    fi
+
+    echo -e "etcd Server Version: ${GREEN}$etcd_version${NC}"
+
+    # Get etcdctl version
+    local etcdctl_version=""
+    if command -v etcdctl &> /dev/null; then
+        etcdctl_version=$(etcdctl version 2>/dev/null | grep "etcdctl version" | awk '{print $3}' || echo "Unknown")
+    else
+        etcdctl_version="Not installed"
+    fi
+    echo -e "etcdctl Version: ${GREEN}$etcdctl_version${NC}"
+
+    # Get Cilium versions
+    echo -e "\n${YELLOW}===== Cilium Ecosystem Versions =====${NC}"
+
+    # Get cilium server version from pods and extract only the version - make error handling more robust
+    local cilium_server_version=""
+    cilium_server_version=$(kubectl get pods -n "$CILIUM_NAMESPACE" -l k8s-app=cilium -o jsonpath='{.items[0].spec.containers[0].image}' 2>/dev/null || echo "")
+    if [[ -n "$cilium_server_version" ]]; then
+        cilium_server_version=$(echo "$cilium_server_version" | cut -d: -f2 | sed 's/@.*//')  # Remove @sha256...
+    else
+        cilium_server_version="Not found"
+    fi
+    echo -e "Cilium Server Version: ${GREEN}$cilium_server_version${NC}"
+
+    # Get Cilium CLI version
+    local cilium_cli_version=""
+    if command -v cilium &> /dev/null; then
+        cilium_cli_version=$(cilium version 2>/dev/null | grep "cilium-cli" | awk '{print $2}' || echo "Unknown")
+    else
+        cilium_cli_version="Not installed"
+    fi
+    echo -e "Cilium CLI Version: ${GREEN}$cilium_cli_version${NC}"
+
+    # Get Hubble server version and extract only the version - with improved error handling
+    local hubble_server_version=""
+    # First try to find the hubble-relay pod
+    hubble_server_version=$(kubectl get pods -n "$CILIUM_NAMESPACE" -l k8s-app=hubble-relay -o jsonpath='{.items[0].spec.containers[0].image}' 2>/dev/null || echo "")
+    if [[ -z "$hubble_server_version" ]]; then
+        # Try with app=hubble-relay
+        hubble_server_version=$(kubectl get pods -n "$CILIUM_NAMESPACE" -l app=hubble-relay -o jsonpath='{.items[0].spec.containers[0].image}' 2>/dev/null || echo "")
+    fi
+    
+    # If still not found, use the Cilium version since Hubble is bundled with it
+    if [[ -z "$hubble_server_version" ]]; then
+        hubble_server_version="$cilium_server_version"
+    else
+        hubble_server_version=$(echo "$hubble_server_version" | cut -d: -f2 | sed 's/@.*//')  # Remove @sha256...
+    fi
+    echo -e "Hubble Server Version: ${GREEN}$hubble_server_version${NC}"
+
+    # Get Hubble CLI version
+    local hubble_cli_version=""
+    if command -v hubble &> /dev/null; then
+        hubble_cli_version=$(hubble version 2>/dev/null | grep "hubble" | head -1 | awk '{print $2}' || echo "Unknown")
+        # The version is in format "vX.Y.Z@HEAD-hash" so we need to extract just the version part
+        if [[ "$hubble_cli_version" != "Unknown" ]]; then
+            hubble_cli_version=$(echo "$hubble_cli_version" | cut -d'@' -f1 || echo "$hubble_cli_version")
+        fi
+    else
+        hubble_cli_version="Not installed"
+    fi
+    echo -e "Hubble CLI Version: ${GREEN}$hubble_cli_version${NC}"
+
+    # Get Tetragon server version with improved error handling
+    local tetragon_server_version=""
+    tetragon_server_version=$(kubectl get pods -n "$TETRAGON_NAMESPACE" -l app.kubernetes.io/name=tetragon -o jsonpath='{.items[0].spec.containers[0].image}' 2>/dev/null || echo "")
+    if [[ -n "$tetragon_server_version" ]]; then
+        tetragon_server_version=$(echo "$tetragon_server_version" | cut -d: -f2 || echo "Parse error")
+    else
+        tetragon_server_version="Not found"
+    fi
+    echo -e "Tetragon Server Version: ${GREEN}$tetragon_server_version${NC}"
+
+    # Get Tetra CLI version
+    local tetra_cli_version=""
+    if command -v tetra &> /dev/null; then
+        tetra_cli_version=$(tetra version 2>/dev/null | grep -i "CLI version" | awk '{print $3}' || echo "Unknown")
+        if [[ "$tetra_cli_version" == "Unknown" ]]; then
+            # Fall back to old format that just had "Version" 
+            tetra_cli_version=$(tetra version 2>/dev/null | grep "Version" | awk '{print $2}' || echo "Unknown")
+        fi
+    else
+        tetra_cli_version="Not installed"
+    fi
+    echo -e "Tetra CLI Version: ${GREEN}$tetra_cli_version${NC}"
 }
 
 integration_test() {
@@ -856,9 +1373,64 @@ spec:
       port: 80
 EOF
 
+    # Create a Cilium Network Policy for testing
+    echo "Creating Cilium Network Policy..."
+    kubectl apply -f - <<EOF
+apiVersion: "cilium.io/v2"
+kind: CiliumNetworkPolicy
+metadata:
+  name: test-cnp
+  namespace: $TEST_NS
+spec:
+  endpointSelector:
+    matchLabels:
+      app: test-app
+  ingress:
+  - fromEndpoints:
+    - matchLabels: {}
+    toPorts:
+    - ports:
+      - port: "80"
+        protocol: TCP
+EOF
+
+    # Create a Tetragon TracingPolicy for testing
+    echo "Creating Tetragon TracingPolicy..."
+    kubectl apply -f - <<EOF
+apiVersion: cilium.io/v1alpha1
+kind: TracingPolicy
+metadata:
+  name: test-tracing-policy
+  namespace: $TEST_NS
+spec:
+  kprobes:
+  - call: "sys_openat"
+    syscall: true
+    args:
+      - index: 2  # The filename is typically the 3rd argument (index 2)
+        type: "string"
+    selectors:
+    - matchArgs:
+      - index: 2
+        operator: "Prefix"
+        values:
+          - "/etc/"    # Trace opens of files under /etc
+          - "/tmp/test" # Trace opens if filename begins with /tmp/test
+      matchActions:
+      - action: Post
+    - matchArgs:
+      - index: 2
+        operator: "Equal"
+        values:
+          - "/dev/null"
+      matchActions:
+      - action: Post
+EOF
+
     echo "Waiting for resources to be ready..."
     sleep 30
 
+    # Standard checks for core resources
     # Check PVC
     if ! kubectl get pvc test-pvc -n "$TEST_NS" | grep -q Bound; then
         echo -e "${RED}→ PVC not bound${NC}"
@@ -899,11 +1471,105 @@ EOF
         echo -e "${RED}→ IngressRoute not created or not ready${NC}"
         status=1
     fi
+    
+    # Check Cilium Network Policy
+    echo -e "\n${YELLOW}Checking Cilium Network Policy:${NC}"
+    if kubectl get ciliumnetworkpolicies.cilium.io -n "$TEST_NS" test-cnp > /dev/null 2>&1; then
+        echo -e "${GREEN}→ Cilium Network Policy successfully created${NC}"
+        
+        # Run a test to verify Cilium policy enforcement
+        echo "Testing Cilium policy enforcement..."
+        
+        # Create a test pod to verify connectivity
+        kubectl run -n "$TEST_NS" cilium-test --image=curlimages/curl --restart=Never --command -- sleep 3600 > /dev/null 2>&1
+        
+        # Wait for the pod to be ready
+        kubectl wait --for=condition=ready pod -n "$TEST_NS" cilium-test --timeout=60s > /dev/null 2>&1
+        
+        # Skip Cilium endpoint checks since the commands are no longer available
+        # Test connectivity directly instead
+        echo "Testing network connectivity with Cilium policy..."
+        if kubectl exec -n "$TEST_NS" cilium-test -- curl -s -H "Host: test-app.local" http://test-service > /dev/null 2>&1; then
+            echo -e "${GREEN}→ Network connectivity works with Cilium policy${NC}"
+        else
+            echo -e "${RED}→ Network connectivity fails with Cilium policy${NC}"
+            status=1
+        fi
+        
+        # Clean up the test pod
+        kubectl delete pod -n "$TEST_NS" cilium-test --wait=false > /dev/null 2>&1
+    else
+        echo -e "${RED}→ Cilium Network Policy not created or CRD not installed${NC}"
+        echo "This suggests Cilium may not be installed or configured correctly"
+        status=1
+    fi
+    
+    # Check Tetragon TracingPolicy
+    echo -e "\n${YELLOW}Checking Tetragon TracingPolicy:${NC}"
+    if kubectl get tracingpolicies.cilium.io -n "$TEST_NS" test-tracing-policy > /dev/null 2>&1; then
+        echo -e "${GREEN}→ Tetragon TracingPolicy successfully created${NC}"
+        
+        # Check if Tetragon is processing policies
+        if command -v tetra &> /dev/null; then
+            echo "Looking for Tetragon pods..."
+            local tetragon_pod=$(kubectl get pods -n "$TETRAGON_NAMESPACE" -l app.kubernetes.io/name=tetragon -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)
+            
+            if [[ -n "$tetragon_pod" ]]; then
+                echo "Found Tetragon pod: $tetragon_pod"
+                echo "Checking if Tetragon policy is processed..."
+                
+            # Check Tetragon logs for indication of policy processing
+            if kubectl logs -n "$TETRAGON_NAMESPACE" "$tetragon_pod" -c tetragon --tail=50 | grep -q "policy\|tracing\|TracingPolicy"; then
+                echo -e "${GREEN}→ Tetragon shows evidence of policy processing${NC}"
+            else
+                echo -e "${YELLOW}→ Could not confirm Tetragon policy processing in logs (not necessarily an error)${NC}"
+            fi
+            
+            # Generate some network activity that should trigger our policy
+            echo "Generating traffic for Tetragon to observe..."
+            kubectl run -n "$TEST_NS" --rm -i --restart=Never --image=curlimages/curl curl-test -- curl -s -H "Host: test-app.local" http://test-service > /dev/null 2>&1 || true
+            
+            # Check if Tetragon is capturing events - specify container explicitly
+            echo "Checking if Tetragon is capturing events..."
+            if tetra getevents --pod-namespace "$TETRAGON_NAMESPACE" --pod-name "$tetragon_pod" --pod-container tetragon --server-address "unix://${TETRAGON_NAMESPACE}/${tetragon_pod}:/var/run/tetragon/tetragon.sock" --timeout 2 2>/dev/null | head -n 5 | grep -q "."; then
+                echo -e "${GREEN}→ Tetragon is actively capturing events${NC}"
+            else
+                echo -e "${YELLOW}→ No events captured by Tetragon within timeout period (might need longer observation)${NC}"
+                # Try with a port-forward approach as a fallback
+                echo "Trying alternative approach with port-forward..."
+                kubectl port-forward -n "$TETRAGON_NAMESPACE" "pod/$tetragon_pod" 54321:54321 >/dev/null 2>&1 &
+                local pf_pid=$!
+                sleep 2
+                tetra getevents --server-address localhost:54321 --timeout 2 2>/dev/null | head -n 5 | grep -q "." && \
+                    echo -e "${GREEN}→ Tetragon events found via port-forward${NC}" || \
+                    echo -e "${YELLOW}→ Still no events found, but Tetragon appears to be running${NC}"
+                kill ${pf_pid} >/dev/null 2>&1 || true
+                wait ${pf_pid} 2>/dev/null || true
+            fi
+            else
+                echo -e "${RED}→ Tetragon pod not found${NC}"
+                status=1
+            fi
+        else
+            echo -e "${YELLOW}→ Tetra CLI not available for detailed testing${NC}"
+            echo "Checking Tetragon pod logs for basic activity..."
+            
+            if kubectl get pods -n "$TETRAGON_NAMESPACE" -l app.kubernetes.io/name=tetragon 2>/dev/null | grep -q Running; then
+                echo -e "${GREEN}→ Tetragon pods are running, which suggests basic functionality${NC}"
+            else
+                echo -e "${RED}→ Tetragon pods not found or not running${NC}"
+                status=1
+            fi
+        fi
+    else
+        echo -e "${RED}→ Tetragon TracingPolicy not created or CRD not installed${NC}"
+        echo "This suggests Tetragon may not be installed or configured correctly"
+        status=1
+    fi
 
     # Test the application
-    echo "Testing application access..."
-    TEMP_POD="curl-pod"
-    kubectl run -n "$TEST_NS" $TEMP_POD --rm -i --restart=Never --image=curlimages/curl \
+    echo -e "\n${YELLOW}Testing application access:${NC}"
+    kubectl run -n "$TEST_NS" curl-pod --rm -i --restart=Never --image=curlimages/curl \
         -- -s -H "Host: test-app.local" http://test-service >/dev/null 2>&1
     if [ $? -eq 0 ]; then
         echo -e "${GREEN}→ Application is accessible${NC}"
@@ -912,20 +1578,32 @@ EOF
         status=1
     fi
 
-# Cleanup Certificate first to avoid termination errors
-echo "Cleaning up Certificate resources..."
-kubectl delete certificate -n "$TEST_NS" --all --timeout=30s >/dev/null 2>&1
-sleep 5  # Give cert-manager time to process the deletion
+    # Cleanup in the correct order to avoid resource deadlocks
+    echo -e "\n${YELLOW}Cleaning up test resources...${NC}"
+    
+    # Cilium and Tetragon resources
+    kubectl delete ciliumnetworkpolicies.cilium.io -n "$TEST_NS" test-cnp --timeout=15s 2>/dev/null || true
+    kubectl delete tracingpolicies.cilium.io -n "$TEST_NS" test-tracing-policy --timeout=15s 2>/dev/null || true
 
-# Cleanup resources in reverse order of creation
-echo "Cleaning up test resources..."
-kubectl delete ingressroute.traefik.io -n "$TEST_NS" test-ingress --timeout=15s >/dev/null 2>&1
-kubectl delete service -n "$TEST_NS" test-service --timeout=15s >/dev/null 2>&1
-kubectl delete deployment -n "$TEST_NS" test-app --timeout=30s >/dev/null 2>&1
-kubectl delete certificate -n "$TEST_NS" test-cert --timeout=30s >/dev/null 2>&1
-kubectl delete pvc -n "$TEST_NS" test-pvc --timeout=30s >/dev/null 2>&1
-sleep 5
-kubectl delete namespace "$TEST_NS" --timeout=60s >/dev/null 2>&1
+    # Standard resources - clean up certificate first as it can block deletions
+    kubectl delete certificate -n "$TEST_NS" --all --timeout=30s >/dev/null 2>&1 
+    sleep 5  # Give cert-manager time to process the deletion
+
+    # Cleanup remaining resources in reverse order of creation
+    kubectl delete ingressroute.traefik.io -n "$TEST_NS" test-ingress --timeout=15s >/dev/null 2>&1
+    kubectl delete service -n "$TEST_NS" test-service --timeout=15s >/dev/null 2>&1
+    kubectl delete deployment -n "$TEST_NS" test-app --timeout=30s >/dev/null 2>&1
+    kubectl delete pvc -n "$TEST_NS" test-pvc --timeout=30s >/dev/null 2>&1
+    sleep 5
+    kubectl delete namespace "$TEST_NS" --timeout=60s >/dev/null 2>&1
+
+    # Disable Hubble after integration test
+    export KUBECONFIG=/etc/rancher/k3s/k3s.yaml    
+    if command -v cilium &>/dev/null; then
+      echo -e "\n${YELLOW}Disabling Hubble...${NC}"
+      cilium hubble disable || echo -e "${YELLOW}Hubble disable failed. It might not have been enabled.${NC}"
+    fi
+
     print_status $status "Integration test"
     return $status
 }
@@ -935,6 +1613,19 @@ echo "================================================================"
 
 # Track overall status
 OVERALL_STATUS=0
+
+# Install CLI tools first
+install_cilium_cli
+install_tetra_cli
+install_hubble_cli
+
+# Enable Hubble after installation
+export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+if command -v cilium &>/dev/null; then
+    echo -e "\n${YELLOW}Enabling Hubble...${NC}"
+    cilium hubble enable || echo -e "${YELLOW}Hubble enable failed. It might already be enabled or Cilium may not be properly configured.${NC}"
+    sleep 15
+fi
 
 # Check pods and deployments in each namespace
 for ns in "${NAMESPACES[@]}"; do
@@ -970,6 +1661,19 @@ fi
 
 # Add etcd health check
 if ! check_etcd; then
+    OVERALL_STATUS=1
+fi
+
+# Add Cilium and Tetragon health checks
+if ! check_cilium; then
+    OVERALL_STATUS=1
+fi
+
+if ! check_hubble; then
+    OVERALL_STATUS=1
+fi
+
+if ! check_tetragon; then
     OVERALL_STATUS=1
 fi
 

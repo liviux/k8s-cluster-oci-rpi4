@@ -178,6 +178,16 @@ variable "certmanager_email_address" {
   description = "Your email address for certification manager"
 }
 
+variable "cilium_release" {
+  type        = string
+  description = "Version of Cilium to install"
+}
+
+variable "tetragon_release" {
+  type        = string
+  description = "Version of Tetragon to install"
+}
+
 variable "longhorn_release" {
   type        = string
   description = "Version of Longhorn to install"

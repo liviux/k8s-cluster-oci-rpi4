@@ -29,12 +29,15 @@ data "cloudinit_config" "k3s_server_tpl" {
       availability_domain           = var.availability_domain
       k3s_tls_san                   = oci_load_balancer_load_balancer.k3s_load_balancer.ip_address_details[0].ip_address
       expose_kubeapi                = var.expose_kubeapi
-      k3s_tls_san_public            = local.public_lb_ip[0]
+      k3s_tls_san_public            = local.public_lb_ip[0]      
       argocd_release                = var.argocd_release
       argocd_image_updater_release  = var.argocd_image_updater_release
       longhorn_release              = var.longhorn_release
       traefik_release               = var.traefik_release      
       helm_version                  = var.helm_version
+      cilium_release                = var.cilium_release
+      tetragon_release              = var.tetragon_release
+      cluster_name                  = var.cluster_name
     }))
   }
 }
