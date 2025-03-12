@@ -28,3 +28,8 @@ output "cluster_endpoint" {
   description = "The endpoint for your K3s cluster"
   value       = "https://${local.public_lb_ip[0]}:${var.kube_api_port}"
 }
+
+output "k3s_url" {
+  description = "Internal K3s load balancer IP address used for cluster communication"
+  value = oci_load_balancer_load_balancer.k3s_load_balancer.ip_address_details[0].ip_address
+}

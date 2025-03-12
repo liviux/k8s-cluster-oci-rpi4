@@ -35,6 +35,9 @@ data "cloudinit_config" "k3s_server_tpl" {
       longhorn_release              = var.longhorn_release
       traefik_release               = var.traefik_release      
       helm_version                  = var.helm_version
+      cilium_release                = var.cilium_release
+      tetragon_release              = var.tetragon_release
+      cluster_name                  = var.cluster_name
     }))
   }
 }
