@@ -854,10 +854,32 @@ install_hubble_cli() {
 }
 
 check_cilium() {
+    # Enable Hubble after installation
+    if command -v cilium &>/dev/null; then
+        echo -e "\n${YELLOW}Enabling Hubble...${NC}"
+        env KUBECONFIG=/etc/rancher/k3s/k3s.yaml cilium hubble enable || echo -e "${YELLOW}Hubble enable failed. It might already be enabled or Cilium may not be properly configured.${NC}"
+        
+        # Use Cilium's built-in port-forward instead of kubectl
+        echo "Setting up port-forward to Hubble Relay using cilium CLI..."
+        cilium hubble port-forward & 
+        local pf_pid=$!
+        
+        # Give more time for port-forward to establish
+        sleep 10
+        
+        # Test if Hubble is accessible now
+        echo "Testing Hubble connectivity..."
+        if hubble status &>/dev/null; then
+            echo -e "${GREEN}Hubble Relay is available.${NC}"
+        else
+            echo -e "${YELLOW}Hubble Relay not accessible after multiple attempts.${NC}"
+        fi
+    fi
+
     echo -e "\n${YELLOW}===== Checking Cilium health =====${NC}"
     
     local status=0
-    
+        
     # Check if Cilium pods are running in the configured namespace
     echo "Checking for Cilium pods..."
     if kubectl get pods -n "$CILIUM_NAMESPACE" -l k8s-app=cilium 2>/dev/null | grep -q Running; then
@@ -1618,14 +1640,6 @@ OVERALL_STATUS=0
 install_cilium_cli
 install_tetra_cli
 install_hubble_cli
-
-# Enable Hubble after installation
-export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
-if command -v cilium &>/dev/null; then
-    echo -e "\n${YELLOW}Enabling Hubble...${NC}"
-    cilium hubble enable || echo -e "${YELLOW}Hubble enable failed. It might already be enabled or Cilium may not be properly configured.${NC}"
-    sleep 15
-fi
 
 # Check pods and deployments in each namespace
 for ns in "${NAMESPACES[@]}"; do
