@@ -1,4 +1,6 @@
 # Kubernetes cluster with OCI free-tier and Raspberry Pi4
+**Update March 2025**: While working on updating this repository to provision a K3s cluster on OCI Free Tier with Cilium, Wireguard, and other optimisations, I had to stop as OCI is very unreliable. Even switching to Pay-as-you-Go, they still closed my account, another account can't switch to PAYG, and so on. I am going to AWS until I have a working account and can finish this repo and documentation.
+
 This tutorial provides a detailed guide for deploying a Kubernetes cluster (using k3s) with 4 x OCI free-tier ARM instances and 4 x Raspberry Pi 4 (or as many as you have). It also covers the necessary applications for installation (Terraform and Ansible) and various tools installed on the cluster (Lens, MetalLB, Helm, Arkade, Longhorn, Portainer, ArgoCD, Prometheus, Grafana, etc.). I've written a series of articles on [dev.to](https://dev.to/liviux/k8s-cluster-with-oci-free-tier-and-raspberry-pi4-part-1-28k0) for this repository.
 
 
